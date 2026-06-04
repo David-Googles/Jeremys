@@ -1,0 +1,22 @@
+{
+  "exported_at": "2026-06-04T22:34:00Z",
+  "exported_by": "Claude (session 326514b9)",
+  "project": "Jeremys dashboard",
+  "repo": "https://github.com/David-Googles/Jeremys",
+  "source_dir": "C:\\Users\\lenovo\\.claude\\projects\\C--Users-lenovo-Documents-ZZZDashboard-Jeremys\\memory\\",
+  "files": [
+    {
+      "name": "MEMORY.md",
+      "content": "- [User GitHub identity](user-github-identity.md) — David-Googles / Ukownloser@gmail.com, repo David-Googles/Jeremys\n"
+    },
+    {
+      "name": "user-github-identity.md",
+      "content": "---\nname: user-github-identity\ndescription: \"User's GitHub account, repo, and commit identity for the Jeremys dashboard project\"\nmetadata: \n  node_type: memory\n  type: user\n  originSessionId: 326514b9-63d8-417f-a749-5846ddd09707\n---\n\nGitHub username: `David-Googles`\nGitHub email (for commits): `Ukownloser@gmail.com`\nPrimary repo: https://github.com/David-Googles/Jeremys\n"
+    }
+  ],
+  "restore_instructions": [
+    "Create directory if missing: C:\\Users\\lenovo\\.claude\\projects\\C--Users-lenovo-Documents-ZZZDashboard-Jeremys\\memory\\",
+    "For each file in `files`, write its `content` to <source_dir><name>.",
+    "MEMORY.md is the index; individual memory files are referenced from it via [[name]] links."
+  ]
+}
