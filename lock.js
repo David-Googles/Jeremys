@@ -5,17 +5,7 @@
 (function () {
   'use strict';
 
-  // Hide everything immediately
-  document.documentElement.style.visibility = 'hidden';
-
-  function getStoredPin() {
-    try {
-      const s = JSON.parse(localStorage.getItem('app_state'));
-      if (s && typeof s.pin === 'string') return s.pin;
-    } catch (e) {}
-    return localStorage.getItem('pin') || '1234';
-  }
-
+  // Create and show lock immediately (sync)
   function showLock() {
     const wrap = document.createElement('div');
     wrap.id = 'lock-screen';
@@ -51,11 +41,18 @@
     status.style.cssText = 'margin-top: 16px; font-size: 12px; color: #76746E;';
     wrap.appendChild(status);
 
+    function getStoredPin() {
+      try {
+        const s = JSON.parse(localStorage.getItem('app_state'));
+        if (s && typeof s.pin === 'string') return s.pin;
+      } catch (e) {}
+      return localStorage.getItem('pin') || '1234';
+    }
+
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         if (input.value.length >= 4 && input.value === getStoredPin()) {
           wrap.remove();
-          document.documentElement.style.visibility = 'visible';
         } else {
           status.textContent = 'Incorrect PIN.';
           status.style.color = '#FF6B6B';
@@ -64,10 +61,16 @@
       }
     });
 
-    document.body.appendChild(wrap);
-    input.focus();
-    // Show the lock while keeping page hidden
-    document.documentElement.style.visibility = 'visible';
+    // Insert as first child of body
+    if (document.body) {
+      document.body.insertBefore(wrap, document.body.firstChild);
+      input.focus();
+    } else {
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.insertBefore(wrap, document.body.firstChild);
+        input.focus();
+      });
+    }
   }
 
   // Lock only the bento hub (index.html)
@@ -75,6 +78,6 @@
   const isIndex = p.endsWith('index.html') || p === '/' || p.endsWith('/');
 
   if (isIndex) {
-    document.addEventListener('DOMContentLoaded', showLock);
+    showLock();
   }
 })();
