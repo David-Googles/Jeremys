@@ -1,23 +1,22 @@
 // =============================================================
 // Passcode lock for dashboard homepage.
-// Loads PIN from synced app_state. Change `pin` in Supabase to set.
+// Default PIN: 1234. Change via Supabase: set app_state.data.pin
 // =============================================================
 (function () {
   'use strict';
 
-  const PIN_KEY_NAME = 'pin'; // stored in app_state.data.pin
+  // Hide everything immediately
+  document.documentElement.style.visibility = 'hidden';
 
   function getStoredPin() {
     try {
       const s = JSON.parse(localStorage.getItem('app_state'));
       if (s && typeof s.pin === 'string') return s.pin;
-      const p = localStorage.getItem(PIN_KEY_NAME);
-      if (p) return p;
     } catch (e) {}
-    return '1234'; // default PIN
+    return localStorage.getItem('pin') || '1234';
   }
 
-  function createLockScreen() {
+  function showLock() {
     const wrap = document.createElement('div');
     wrap.id = 'lock-screen';
     wrap.style.cssText = `
@@ -35,7 +34,6 @@
     const input = document.createElement('input');
     input.type = 'password';
     input.inputMode = 'numeric';
-    input.pattern = '[0-9]*';
     input.maxLength = 6;
     input.placeholder = 'Enter PIN';
     input.autocomplete = 'one-time-code';
@@ -57,7 +55,7 @@
       if (e.key === 'Enter') {
         if (input.value.length >= 4 && input.value === getStoredPin()) {
           wrap.remove();
-          document.body.style.visibility = 'visible';
+          document.documentElement.style.visibility = 'visible';
         } else {
           status.textContent = 'Incorrect PIN.';
           status.style.color = '#FF6B6B';
@@ -66,19 +64,17 @@
       }
     });
 
-    document.body.style.visibility = 'hidden';
     document.body.appendChild(wrap);
     input.focus();
+    // Show the lock while keeping page hidden
+    document.documentElement.style.visibility = 'visible';
   }
 
-  // Only lock the bento hub (index.html), not other pages
+  // Lock only the bento hub (index.html)
   const p = (window.location.pathname || '').toLowerCase();
-  const isIndex = p.endsWith('index.html') || p === '/' || p === '';
+  const isIndex = p.endsWith('index.html') || p === '/' || p.endsWith('/');
+
   if (isIndex) {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', createLockScreen, { once: true });
-    } else {
-      createLockScreen();
-    }
+    document.addEventListener('DOMContentLoaded', showLock);
   }
 })();
