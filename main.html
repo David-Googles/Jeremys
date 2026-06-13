@@ -588,6 +588,41 @@ body::after {
 }
 .gm-status.gm-status-error { color: var(--danger); }
 
+/* ===== Calendar ===== */
+.calendar-section { margin-top: 24px; }
+.calendar-title { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; }
+#calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.cal-day {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  font-size: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.cal-done { background: rgba(107, 227, 164, 0.15); border-color: rgba(107, 227, 164, 0.3); }
+.cal-partial { background: rgba(242, 192, 99, 0.12); border-color: rgba(242, 192, 99, 0.25); }
+.cal-miss { background: rgba(255, 107, 107, 0.12); border-color: rgba(255, 107, 107, 0.25); }
+.cal-date { color: var(--text-tertiary); font-family: var(--font-mono); }
+.cal-pct { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ===== Stats ===== */
+.stats-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+.stats-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.stats-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.stats-val { font-size: 13px; font-family: var(--font-mono); color: var(--text-secondary); }
+#statsBar { display: flex; gap: 2px; height: 6px; }
+.stats-seg { flex: 1; background: rgba(255,255,255,0.06); border-radius: 2px; }
+.stats-seg-on { background: var(--success); }
+
 @media (max-width: 480px) {
   body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
   .gm-card { padding: 16px; }
@@ -689,6 +724,25 @@ body::after {
         <div class="gm-status" id="tomorrowStatus"></div>
       </div>
     </div>
+
+    <!-- Calendar -->
+    <div class="calendar-section">
+      <div class="calendar-title">Recent Days</div>
+      <div id="calendarGrid"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-section">
+      <div class="stats-row">
+        <span class="stats-label">Overall Completion</span>
+        <span class="stats-val" id="statsDays">— days</span>
+      </div>
+      <div id="statsBar"></div>
+      <div class="stats-row" style="margin-top: 8px;">
+        <span class="stats-label">All-Time Progress</span>
+        <span class="stats-val" id="statsPct">—</span>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -769,6 +823,8 @@ body::after {
       const dateStr = k.slice('goals:'.length);
       if (dateStr >= todayDateStr) return;
       const old = getGoals(k);
+      // Record to history BEFORE considering rollover
+      if (old.length > 0) recordToHistory(dateStr, old);
       old.forEach(g => {
         if (!g.done && g.text && !texts.has(g.text)) {
           today.push({ text: g.text, done: false });
@@ -778,6 +834,17 @@ body::after {
       storeDelete(k);
     });
     setGoals(todayK, today);
+  }
+
+  // Record a day's goals to history (called during rollover)
+  function recordToHistory(dateStr, goals) {
+    const done = goals.filter(g => g.done).length;
+    const pct = goals.length > 0 ? Math.round(done / goals.length * 100) : 0;
+    const h = getHistory();
+    if (!h[dateStr]) {
+      h[dateStr] = { done: done, total: goals.length, pct: pct };
+      saveHistory(h);
+    }
   }
 
   // ---------- streak ----------
@@ -1186,6 +1253,74 @@ body::after {
     renderListInto(goals, document.getElementById('tomorrowList'), document.getElementById('tomorrowEmpty'), tomorrowKey(), true);
   }
 
+  // ---------- Calendar History ----------
+  const HISTORY_KEY = 'goals:history';
+  function getHistory() {
+    const h = storeGet(HISTORY_KEY);
+    return h && typeof h === 'object' ? h : {};
+  }
+  function saveHistory(h) { storeSet(HISTORY_KEY, h); }
+  function recordTodayCompletion() {
+    const todayStr = getActiveDateString();
+    if (todayStr === getTomorrowDateString()) return; // Don't record if in rollover window
+    const goals = getGoals('goals:' + todayStr);
+    if (goals.length === 0) return;
+    const done = goals.filter(g => g.done).length;
+    const pct = Math.round(done / goals.length * 100);
+    const h = getHistory();
+    h[todayStr] = { done: done, total: goals.length, pct: pct };
+    saveHistory(h);
+  }
+  function renderCalendar() {
+    const h = getHistory();
+    const dates = Object.keys(h).sort().reverse().slice(0, 28); // Last 28 days
+    const container = document.getElementById('calendarGrid');
+    if (!container) return;
+    container.innerHTML = '';
+    dates.forEach(d => {
+      const info = h[d];
+      const btn = document.createElement('button');
+      btn.className = 'cal-day';
+      btn.dataset.date = d;
+      btn.innerHTML = '<span class="cal-date">' + d.split('-')[1] + '/' + d.split('-')[2] + '</span><span class="cal-pct">' + info.pct + '%</span>';
+      if (info.pct === 100) btn.classList.add('cal-done');
+      else if (info.pct >= 50) btn.classList.add('cal-partial');
+      else btn.classList.add('cal-miss');
+      container.appendChild(btn);
+    });
+  }
+
+  // ---------- Stats ----------
+  function getStats() {
+    const h = getHistory();
+    const days = Object.values(h);
+    const totalDays = days.length;
+    const totalGoals = days.reduce((sum, d) => sum + d.total, 0);
+    const totalDone = days.reduce((sum, d) => sum + d.done, 0);
+    if (totalDays === 0) return { totalDays: 0, pct: 0 };
+    return { totalDays, pct: totalDone, totalDone, totalGoals, overall: Math.round(totalDone / totalGoals * 100) };
+  }
+  function renderStats() {
+    const stats = getStats();
+    const daysEl = document.getElementById('statsDays');
+    const pctEl = document.getElementById('statsPct');
+    const barEl = document.getElementById('statsBar');
+    if (daysEl) daysEl.textContent = stats.totalDays + ' days';
+    if (pctEl) pctEl.textContent = stats.totalGoals > 0 ? stats.overall + '% done' : '—';
+    if (barEl) {
+      barEl.innerHTML = '';
+      if (stats.totalGoals > 0) {
+        const segments = 10;
+        for (let i = 0; i < segments; i++) {
+          const seg = document.createElement('div');
+          seg.className = 'stats-seg';
+          if (i < segments * stats.overall / 100) seg.classList.add('stats-seg-on');
+          barEl.appendChild(seg);
+        }
+      }
+    }
+  }
+
   // ---------- Push remaining ----------
   document.getElementById('gmPushBtn').addEventListener('click', () => {
     const today    = getGoals(todayKey());
@@ -1291,35 +1426,56 @@ body::after {
     loadTomorrow
   );
 
-  // ---------- Boot ----------
-  rollover();
-  processStreak();
-  loadToday();
-  loadTomorrow();
-  renderStreak();
-  updateDayRing();
-  setInterval(updateDayRing, 60 * 1000);
-  startTicker();
+  // ========== Boot - wait for sync first ==========
+  let syncReady = false;
+  const boot = () => {
+    rollover();
+    processStreak();
+    loadToday();
+    loadTomorrow();
+    renderStreak();
+    updateDayRing();
+    renderCalendar();
+    renderStats();
+    setInterval(updateDayRing, 60 * 1000);
+    startTicker();
+    // Periodically record current day's progress (for live updates to calendar)
+    setInterval(() => {
+      recordTodayCompletion();
+      renderCalendar();
+      renderStats();
+    }, 60 * 1000);
+  };
 
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
-    loadToday(); loadTomorrow(); renderStreak();
+    loadToday(); loadTomorrow(); renderStreak(); renderCalendar(); renderStats();
   });
-})();
-</script>
+  // Also re-render when sync applies remote changes
+  window.addEventListener('goals-changed', () => {
+    loadToday(); loadTomorrow(); renderStreak(); renderCalendar(); renderStats();
+  });
 
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  if (typeof initCloudSync !== 'function') return;
-  initCloudSync({
-    appKey: 'goals',
-    syncedPrefixes: ['goals:'],
-    onApplied: function () {
-      window.dispatchEvent(new CustomEvent('goals-changed'));
-      window.dispatchEvent(new Event('storage'));
-    }
-  });
-});
-</script>
+  // Wait for sync.js to initialize before booting
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof initCloudSync === 'function') initCloudSync({
+        appKey: 'goals',
+        syncedKeys: ['goals:history'],
+        syncedPrefixes: ['goals:'],
+        onApplied: () => boot()
+      });
+      else boot();
+    });
+  } else {
+    if (typeof initCloudSync === 'function') initCloudSync({
+      appKey: 'goals',
+      syncedKeys: ['goals:history'],
+      syncedPrefixes: ['goals:'],
+      onApplied: () => boot()
+    });
+    else boot();
+  }
+})();
 </body>
 </html>
