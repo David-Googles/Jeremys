@@ -20,6 +20,7 @@
 | `index.html` | Main "Goals" dashboard (daily checkboxes, ticker). Title: "majds dashboard". |
 | `health.html` | Daily Stack (supplements checklist) + embeds `po-water.html` in an iframe. |
 | `gym.html` | Gym/workout tracker with photo log. Has its own bottom tab bar. |
+| `main.html` |  Main "Goals" dashboard (daily checkboxes, ticker). Title: "majds dashboard". |
 | `finance.html` | Net worth, subs, wishlist, incoming orders. Has its own internal 4-tab nav. |
 | `po-water.html` | Water tracker. Standalone or embedded in `health.html` iframe. |
 | `topbar.js` | Self-injects compact topbar (water + 📊 finance) and Instagram-style bottombar (Main/Health/Fitness). Skips chrome on `finance.html` and inside iframes. |
