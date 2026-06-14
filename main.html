@@ -1329,20 +1329,23 @@ body::after {
   }
 
   // ---------- Push remaining ----------
-  document.getElementById('gmPushBtn').addEventListener('click', () => {
-    const today    = getGoals(todayKey());
-    const remaining = today.filter(g => !g.done);
-    if (remaining.length === 0) return;
-    if (!confirm('Move ' + remaining.length + ' unchecked goal' + (remaining.length === 1 ? '' : 's') + ' to tomorrow?')) return;
-    const tomorrow = getGoals(tomorrowKey());
-    const seen = new Set(tomorrow.map(g => g.text));
-    remaining.forEach(g => {
-      if (!seen.has(g.text)) { tomorrow.push({ text: g.text, done: false }); seen.add(g.text); }
+  const pushBtn = document.getElementById('gmPushBtn');
+  if (pushBtn) {
+    pushBtn.addEventListener('click', () => {
+      const today    = getGoals(todayKey());
+      const remaining = today.filter(g => !g.done);
+      if (remaining.length === 0) return;
+      if (!confirm('Move ' + remaining.length + ' unchecked goal' + (remaining.length === 1 ? '' : 's') + ' to tomorrow?')) return;
+      const tomorrow = getGoals(tomorrowKey());
+      const seen = new Set(tomorrow.map(g => g.text));
+      remaining.forEach(g => {
+        if (!seen.has(g.text)) { tomorrow.push({ text: g.text, done: false }); seen.add(g.text); }
+      });
+      setGoals(tomorrowKey(), tomorrow);
+      setGoals(todayKey(), today.filter(g => g.done));
+      loadToday(); loadTomorrow();
     });
-    setGoals(tomorrowKey(), tomorrow);
-    setGoals(todayKey(), today.filter(g => g.done));
-    loadToday(); loadTomorrow();
-  });
+  }
 
   // ---------- Add + Polish handlers ----------
   function showStatus(el, message, isError) {
