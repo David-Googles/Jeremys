@@ -76,6 +76,7 @@ body::after {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
+  cursor: pointer;
 }
 @media (max-width: 480px) { .dash-title { font-size: 22px; } }
 
@@ -669,7 +670,7 @@ body::after {
 <body>
 <div class="page">
 
-  <h1 class="dash-title">My Dashboard</h1>
+  <h1 class="dash-title" id="dashTitle" title="Tap to rename" tabindex="0">My Dashboard</h1>
 
   <div class="ticker-row">
     <div class="goal-ticker" id="goalTicker" aria-live="polite" aria-atomic="true">
@@ -801,6 +802,7 @@ body::after {
 
   const WAKE_HOUR  = 8;
   const SLEEP_HOUR = 24;
+  const TITLE_KEY = 'goal_title_v1';
 
   // ---------- storage helpers ----------
   function storeGet(key) {
@@ -856,6 +858,29 @@ body::after {
     return Array.isArray(g) ? g : [];
   }
   function setGoals(key, list) { storeSet(key, list); }
+
+  function loadTitle() {
+    const title = storeGet(TITLE_KEY);
+    return typeof title === 'string' && title.trim() ? title.trim() : 'My Dashboard';
+  }
+  function saveTitle(title) {
+    storeSet(TITLE_KEY, title);
+  }
+  function renderTitle() {
+    const title = loadTitle();
+    const el = document.getElementById('dashTitle');
+    if (el) el.textContent = title;
+    document.title = title;
+  }
+  function renderAllMain() {
+    renderTitle();
+    loadToday();
+    loadTomorrow();
+    renderStreak();
+    updateDayRing();
+    buildCalendar();
+    if (selectedDate) showDayDetails(selectedDate);
+  }
 
   // ---------- rollover: pull undone older goals into today ----------
   function rollover() {
@@ -1286,6 +1311,21 @@ body::after {
     renderListInto(goals, document.getElementById('tomorrowList'), document.getElementById('tomorrowEmpty'), tomorrowKey(), true);
   }
 
+  document.getElementById('dashTitle').addEventListener('click', () => {
+    const next = prompt('Rename dashboard title:', loadTitle());
+    if (next == null) return;
+    const title = next.trim();
+    if (!title) return;
+    saveTitle(title);
+    renderTitle();
+  });
+  document.getElementById('dashTitle').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.click();
+    }
+  });
+
   // ---------- Push remaining ----------
   document.getElementById('gmPushBtn').addEventListener('click', () => {
     const today    = getGoals(todayKey());
@@ -1535,28 +1575,26 @@ body::after {
   // ---------- Boot ----------
   rollover();
   processStreak();
-  loadToday();
-  loadTomorrow();
-  renderStreak();
-  updateDayRing();
+  renderAllMain();
   setInterval(updateDayRing, 60 * 1000);
   startTicker();
-  buildCalendar();
+
+  // Seed the title key so it can sync across devices.
+  if (!localStorage.getItem(TITLE_KEY)) saveTitle(loadTitle());
 
   // Cloud sync
   if (window.initCloudSync) {
     window.initCloudSync({
       appKey: 'goals',
+      syncedKeys: [TITLE_KEY, 'goal_streak_v1'],
       syncedPrefixes: ['goals:'],
-      onApplied: buildCalendar
+      onApplied: renderAllMain
     });
   }
 
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
-    loadToday(); loadTomorrow(); renderStreak();
-    if (selectedDate) showDayDetails(selectedDate);
-    else buildCalendar();
+    renderAllMain();
   });
 })();
 </script>
