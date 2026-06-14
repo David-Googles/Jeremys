@@ -34,7 +34,7 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
+  padding: max(28px, env(safe-area-inset-top)) 20px calc(72px + env(safe-area-inset-bottom));
 }
 body::before {
   content: '';
@@ -624,7 +624,7 @@ body::after {
 .stats-seg-on { background: var(--success); }
 
 @media (max-width: 480px) {
-  body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
+  body { padding: max(20px, env(safe-area-inset-top)) 14px calc(55px + env(safe-area-inset-bottom)); }
   .gm-card { padding: 16px; }
   .gm-progress-num { font-size: 36px; }
 }
