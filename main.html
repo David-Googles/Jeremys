@@ -1199,20 +1199,23 @@ body::after {
     card.classList.toggle('gm-all-done', total > 0 && done === total);
 
     const pushBtn = document.getElementById('gmPushBtn');
-    pushBtn.style.display = (total > 0 && done < total) ? 'block' : 'none';
+    if (pushBtn) pushBtn.style.display = (total > 0 && done < total) ? 'block' : 'none';
   }
 
   function renderStreak() {
     const s = loadStreak();
-    document.getElementById('gmStreakNum').textContent = s.count;
-    document.getElementById('gmStreak').classList.toggle('gm-streak-active', s.count > 0);
+    const streakNum = document.getElementById('gmStreakNum');
+    const streak = document.getElementById('gmStreak');
+    if (streakNum) streakNum.textContent = s.count;
+    if (streak) streak.classList.toggle('gm-streak-active', s.count > 0);
   }
 
   function renderTomorrowCount() {
     const list = getGoals(tomorrowKey());
-    document.getElementById('gmTomorrowCount').textContent = list.length + ' planned';
-    document.getElementById('tomorrowLabel').textContent =
-      'Plan tomorrow — ' + formatDate(getTomorrowDateString());
+    const countEl = document.getElementById('gmTomorrowCount');
+    const labelEl = document.getElementById('tomorrowLabel');
+    if (countEl) countEl.textContent = list.length + ' planned';
+    if (labelEl) labelEl.textContent = 'Plan tomorrow — ' + formatDate(getTomorrowDateString());
   }
 
   function renderListInto(goals, listEl, emptyEl, key, readOnly) {
