@@ -139,3 +139,9 @@ grep -r "PASTE-YOUR-SUPABASE" .
 # See what sync.js actually loaded
 # Open browser DevTools → Network → reload → click sync.js
 ```
+Tiles (in order):
+  ·01 🏠 Main      — "Goals & daily plan"        → main.html      (big,  accent #6BE3A4)
+  ·02 💪 Fitness   — "Workouts, splits, sessions"→ gym.html       (wide, accent #7DD3FC)
+  ·03 💊 Health    — "Supplements & vitals"      → health.html    (small,accent #A7F3D0)
+  ·04 💧 Water     — "Hydration"                 → po-water.html  (small,accent #60A5FA)
+  ·05 📊 Finance   — "Net worth & spending"      → finance.html   (wide, accent #F2C063)

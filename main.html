@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
-<title>majds dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="sync.js" defer></script>
+<title>My Dashboard</title>
 <script src="topbar.js" defer></script>
 <style>
 :root {
@@ -34,7 +32,7 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  padding: max(28px, env(safe-area-inset-top)) 20px calc(72px + env(safe-area-inset-bottom));
+  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
 }
 body::before {
   content: '';
@@ -137,10 +135,11 @@ body::after {
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   white-space: nowrap;
-  opacity: 1;
-  transition: opacity 0.22s ease;
 }
-.goal-ticker-row.is-fading { opacity: 0; }
+.goal-ticker-row.is-leaving  { animation: ticker-leave 0.45s cubic-bezier(0.55, 0, 0.55, 1) forwards; }
+.goal-ticker-row.is-entering { animation: ticker-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+@keyframes ticker-leave { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-100%); } }
+@keyframes ticker-enter { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
 .goal-ticker-status {
   display: inline-flex; justify-content: center;
   width: 18px;
@@ -588,43 +587,8 @@ body::after {
 }
 .gm-status.gm-status-error { color: var(--danger); }
 
-/* ===== Calendar ===== */
-.calendar-section { margin-top: 24px; }
-.calendar-title { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; }
-#calendarGrid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-}
-.cal-day {
-  aspect-ratio: 1;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.03);
-  font-size: 9px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-.cal-done { background: rgba(107, 227, 164, 0.15); border-color: rgba(107, 227, 164, 0.3); }
-.cal-partial { background: rgba(242, 192, 99, 0.12); border-color: rgba(242, 192, 99, 0.25); }
-.cal-miss { background: rgba(255, 107, 107, 0.12); border-color: rgba(255, 107, 107, 0.25); }
-.cal-date { color: var(--text-tertiary); font-family: var(--font-mono); }
-.cal-pct { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
-
-/* ===== Stats ===== */
-.stats-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); }
-.stats-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.stats-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
-.stats-val { font-size: 13px; font-family: var(--font-mono); color: var(--text-secondary); }
-#statsBar { display: flex; gap: 2px; height: 6px; }
-.stats-seg { flex: 1; background: rgba(255,255,255,0.06); border-radius: 2px; }
-.stats-seg-on { background: var(--success); }
-
 @media (max-width: 480px) {
-  body { padding: max(20px, env(safe-area-inset-top)) 14px calc(55px + env(safe-area-inset-bottom)); }
+  body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
   .gm-card { padding: 16px; }
   .gm-progress-num { font-size: 36px; }
 }
@@ -633,7 +597,7 @@ body::after {
 <body>
 <div class="page">
 
-  <h1 class="dash-title">majds dashboard</h1>
+  <h1 class="dash-title">My Dashboard</h1>
 
   <div class="ticker-row">
     <div class="goal-ticker" id="goalTicker" aria-live="polite" aria-atomic="true">
@@ -724,25 +688,6 @@ body::after {
         <div class="gm-status" id="tomorrowStatus"></div>
       </div>
     </div>
-
-    <!-- Calendar -->
-    <div class="calendar-section">
-      <div class="calendar-title">Recent Days</div>
-      <div id="calendarGrid"></div>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats-section">
-      <div class="stats-row">
-        <span class="stats-label">Overall Completion</span>
-        <span class="stats-val" id="statsDays">— days</span>
-      </div>
-      <div id="statsBar"></div>
-      <div class="stats-row" style="margin-top: 8px;">
-        <span class="stats-label">All-Time Progress</span>
-        <span class="stats-val" id="statsPct">—</span>
-      </div>
-    </div>
   </div>
 
 </div>
@@ -823,8 +768,6 @@ body::after {
       const dateStr = k.slice('goals:'.length);
       if (dateStr >= todayDateStr) return;
       const old = getGoals(k);
-      // Record to history BEFORE considering rollover
-      if (old.length > 0) recordToHistory(dateStr, old);
       old.forEach(g => {
         if (!g.done && g.text && !texts.has(g.text)) {
           today.push({ text: g.text, done: false });
@@ -834,17 +777,6 @@ body::after {
       storeDelete(k);
     });
     setGoals(todayK, today);
-  }
-
-  // Record a day's goals to history (called during rollover)
-  function recordToHistory(dateStr, goals) {
-    const done = goals.filter(g => g.done).length;
-    const pct = goals.length > 0 ? Math.round(done / goals.length * 100) : 0;
-    const h = getHistory();
-    if (!h[dateStr]) {
-      h[dateStr] = { done: done, total: goals.length, pct: pct };
-      saveHistory(h);
-    }
   }
 
   // ---------- streak ----------
@@ -901,31 +833,31 @@ body::after {
     if (cycleIdx >= items.length) cycleIdx = 0;
     const item = items[cycleIdx];
     cycleIdx = (cycleIdx + 1) % items.length;
-    tickerMeta.textContent = done + '/' + total;
 
-    let row = tickerStage.querySelector('.goal-ticker-row');
-    if (!row) {
-      row = document.createElement('div');
-      row.className = 'goal-ticker-row';
-      row.innerHTML =
-        '<span class="goal-ticker-status"></span>' +
-        '<span class="goal-ticker-text"></span>';
-      tickerStage.appendChild(row);
+    const oldRow = tickerStage.querySelector('.goal-ticker-row');
+    const newRow = document.createElement('div');
+    newRow.className = 'goal-ticker-row';
+    const status = document.createElement('span');
+    status.className = 'goal-ticker-status';
+    status.setAttribute('data-status', item.status);
+    status.textContent = statusGlyph(item.status);
+    const text = document.createElement('span');
+    text.className = 'goal-ticker-text';
+    text.textContent = item.text;
+    newRow.appendChild(status);
+    newRow.appendChild(text);
+
+    if (oldRow && !firstTick) {
+      oldRow.classList.add('is-leaving');
+      setTimeout(() => oldRow.remove(), 460);
+      newRow.classList.add('is-entering');
+    } else if (oldRow) {
+      oldRow.remove();
     }
+    tickerStage.appendChild(newRow);
+    firstTick = false;
 
-    const statusEl = row.querySelector('.goal-ticker-status');
-    const textEl   = row.querySelector('.goal-ticker-text');
-
-    const apply = () => {
-      statusEl.setAttribute('data-status', item.status);
-      statusEl.textContent = statusGlyph(item.status);
-      textEl.textContent = item.text;
-      row.classList.remove('is-fading');
-    };
-
-    if (firstTick) { apply(); firstTick = false; return; }
-    row.classList.add('is-fading');
-    setTimeout(apply, 220);
+    tickerMeta.textContent = done + '/' + total;
   }
 
   function startTicker() {
@@ -982,17 +914,11 @@ body::after {
   }
 
   const C = 2 * Math.PI * 52;
-  let fillEl = null;
-  function initDayRing() {
-    fillEl = document.getElementById('dayRingFill');
-    if (fillEl) {
-      fillEl.setAttribute('stroke-dasharray', C);
-      fillEl.setAttribute('stroke-dashoffset', C);
-    }
-  }
+  const fillEl = document.getElementById('dayRingFill');
+  fillEl.setAttribute('stroke-dasharray', C);
+  fillEl.setAttribute('stroke-dashoffset', C);
 
   function updateDayRing() {
-    if (!fillEl) return;
     const now = new Date();
     const hours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
     const percentEl   = document.getElementById('dayRingPercent');
@@ -1000,7 +926,6 @@ body::after {
     const clockEl     = document.getElementById('dayRingClock');
     const statusEl    = document.getElementById('dayRingStatus');
     const remainingEl = document.getElementById('dayRingRemaining');
-    if (!percentEl || !phaseEl || !clockEl || !statusEl || !remainingEl) return;
 
     clockEl.textContent = formatClock(now);
 
@@ -1199,27 +1124,23 @@ body::after {
     card.classList.toggle('gm-all-done', total > 0 && done === total);
 
     const pushBtn = document.getElementById('gmPushBtn');
-    if (pushBtn) pushBtn.style.display = (total > 0 && done < total) ? 'block' : 'none';
+    pushBtn.style.display = (total > 0 && done < total) ? 'block' : 'none';
   }
 
   function renderStreak() {
     const s = loadStreak();
-    const streakNum = document.getElementById('gmStreakNum');
-    const streak = document.getElementById('gmStreak');
-    if (streakNum) streakNum.textContent = s.count;
-    if (streak) streak.classList.toggle('gm-streak-active', s.count > 0);
+    document.getElementById('gmStreakNum').textContent = s.count;
+    document.getElementById('gmStreak').classList.toggle('gm-streak-active', s.count > 0);
   }
 
   function renderTomorrowCount() {
     const list = getGoals(tomorrowKey());
-    const countEl = document.getElementById('gmTomorrowCount');
-    const labelEl = document.getElementById('tomorrowLabel');
-    if (countEl) countEl.textContent = list.length + ' planned';
-    if (labelEl) labelEl.textContent = 'Plan tomorrow — ' + formatDate(getTomorrowDateString());
+    document.getElementById('gmTomorrowCount').textContent = list.length + ' planned';
+    document.getElementById('tomorrowLabel').textContent =
+      'Plan tomorrow — ' + formatDate(getTomorrowDateString());
   }
 
   function renderListInto(goals, listEl, emptyEl, key, readOnly) {
-    if (!listEl || !emptyEl) return;
     listEl.innerHTML = '';
     emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
     const reload = () => (key === todayKey() ? loadToday() : loadTomorrow());
@@ -1264,91 +1185,21 @@ body::after {
     renderListInto(goals, document.getElementById('tomorrowList'), document.getElementById('tomorrowEmpty'), tomorrowKey(), true);
   }
 
-  // ---------- Calendar History ----------
-  const HISTORY_KEY = 'goals:history';
-  function getHistory() {
-    const h = storeGet(HISTORY_KEY);
-    return h && typeof h === 'object' ? h : {};
-  }
-  function saveHistory(h) { storeSet(HISTORY_KEY, h); }
-  function recordTodayCompletion() {
-    const todayStr = getActiveDateString();
-    if (todayStr === getTomorrowDateString()) return; // Don't record if in rollover window
-    const goals = getGoals('goals:' + todayStr);
-    if (goals.length === 0) return;
-    const done = goals.filter(g => g.done).length;
-    const pct = Math.round(done / goals.length * 100);
-    const h = getHistory();
-    h[todayStr] = { done: done, total: goals.length, pct: pct };
-    saveHistory(h);
-  }
-  function renderCalendar() {
-    const h = getHistory();
-    const dates = Object.keys(h).sort().reverse().slice(0, 28); // Last 28 days
-    const container = document.getElementById('calendarGrid');
-    if (!container) return;
-    container.innerHTML = '';
-    dates.forEach(d => {
-      const info = h[d];
-      const btn = document.createElement('button');
-      btn.className = 'cal-day';
-      btn.dataset.date = d;
-      btn.innerHTML = '<span class="cal-date">' + d.split('-')[1] + '/' + d.split('-')[2] + '</span><span class="cal-pct">' + info.pct + '%</span>';
-      if (info.pct === 100) btn.classList.add('cal-done');
-      else if (info.pct >= 50) btn.classList.add('cal-partial');
-      else btn.classList.add('cal-miss');
-      container.appendChild(btn);
-    });
-  }
-
-  // ---------- Stats ----------
-  function getStats() {
-    const h = getHistory();
-    const days = Object.values(h);
-    const totalDays = days.length;
-    const totalGoals = days.reduce((sum, d) => sum + d.total, 0);
-    const totalDone = days.reduce((sum, d) => sum + d.done, 0);
-    if (totalDays === 0) return { totalDays: 0, pct: 0 };
-    return { totalDays, pct: totalDone, totalDone, totalGoals, overall: Math.round(totalDone / totalGoals * 100) };
-  }
-  function renderStats() {
-    const stats = getStats();
-    const daysEl = document.getElementById('statsDays');
-    const pctEl = document.getElementById('statsPct');
-    const barEl = document.getElementById('statsBar');
-    if (!daysEl || !pctEl || !barEl) return;
-    daysEl.textContent = stats.totalDays + ' days';
-    pctEl.textContent = stats.totalGoals > 0 ? stats.overall + '% done' : '—';
-    barEl.innerHTML = '';
-    if (stats.totalGoals > 0) {
-      const segments = 10;
-      for (let i = 0; i < segments; i++) {
-        const seg = document.createElement('div');
-        seg.className = 'stats-seg';
-        if (i < segments * stats.overall / 100) seg.classList.add('stats-seg-on');
-        barEl.appendChild(seg);
-      }
-    }
-  }
-
   // ---------- Push remaining ----------
-  const pushBtn = document.getElementById('gmPushBtn');
-  if (pushBtn) {
-    pushBtn.addEventListener('click', () => {
-      const today    = getGoals(todayKey());
-      const remaining = today.filter(g => !g.done);
-      if (remaining.length === 0) return;
-      if (!confirm('Move ' + remaining.length + ' unchecked goal' + (remaining.length === 1 ? '' : 's') + ' to tomorrow?')) return;
-      const tomorrow = getGoals(tomorrowKey());
-      const seen = new Set(tomorrow.map(g => g.text));
-      remaining.forEach(g => {
-        if (!seen.has(g.text)) { tomorrow.push({ text: g.text, done: false }); seen.add(g.text); }
-      });
-      setGoals(tomorrowKey(), tomorrow);
-      setGoals(todayKey(), today.filter(g => g.done));
-      loadToday(); loadTomorrow();
+  document.getElementById('gmPushBtn').addEventListener('click', () => {
+    const today    = getGoals(todayKey());
+    const remaining = today.filter(g => !g.done);
+    if (remaining.length === 0) return;
+    if (!confirm('Move ' + remaining.length + ' unchecked goal' + (remaining.length === 1 ? '' : 's') + ' to tomorrow?')) return;
+    const tomorrow = getGoals(tomorrowKey());
+    const seen = new Set(tomorrow.map(g => g.text));
+    remaining.forEach(g => {
+      if (!seen.has(g.text)) { tomorrow.push({ text: g.text, done: false }); seen.add(g.text); }
     });
-  }
+    setGoals(tomorrowKey(), tomorrow);
+    setGoals(todayKey(), today.filter(g => g.done));
+    loadToday(); loadTomorrow();
+  });
 
   // ---------- Add + Polish handlers ----------
   function showStatus(el, message, isError) {
@@ -1439,69 +1290,21 @@ body::after {
     loadTomorrow
   );
 
-  // ========== Boot - wait for sync first ==========
-  let syncReady = false;
-  const boot = () => {
-    rollover();
-    processStreak();
-    initDayRing();
-    loadToday();
-    loadTomorrow();
-    renderStreak();
-    updateDayRing();
-    renderCalendar();
-    renderStats();
-    setInterval(updateDayRing, 60 * 1000);
-    startTicker();
-    // Periodically record current day's progress (for live updates to calendar)
-    setInterval(() => {
-      recordTodayCompletion();
-      renderCalendar();
-      renderStats();
-    }, 60 * 1000);
-  };
+  // ---------- Boot ----------
+  rollover();
+  processStreak();
+  loadToday();
+  loadTomorrow();
+  renderStreak();
+  updateDayRing();
+  setInterval(updateDayRing, 60 * 1000);
+  startTicker();
 
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
-    loadToday(); loadTomorrow(); renderStreak(); renderCalendar(); renderStats();
+    loadToday(); loadTomorrow(); renderStreak();
   });
-  // Also re-render when sync applies remote changes
-  window.addEventListener('goals-changed', () => {
-    loadToday(); loadTomorrow(); renderStreak(); renderCalendar(); renderStats();
-  });
-
-  // Wait for sync.js to initialize before booting
-  // sync.js is loaded with defer, so it runs after DOMContentLoaded
-  // We use a small delay or check for initCloudSync availability
-  function startApp() {
-    boot();
-    var trySync = function() {
-      if (typeof window.supabase !== 'undefined' && typeof initCloudSync === 'function') {
-        initCloudSync({
-          appKey: 'goals',
-          syncedKeys: ['goals:history'],
-          syncedPrefixes: ['goals:'],
-          onApplied: function() { loadToday(); loadTomorrow(); renderStreak(); renderCalendar(); renderStats(); }
-        });
-      }
-    };
-    // Try immediately (in case sync.js already loaded)
-    trySync();
-    // Also try after a short delay for deferred scripts
-    setTimeout(trySync, 100);
-    // Keep trying for up to 5 seconds to let all scripts load
-    var attempts = 1;
-    var interval = setInterval(function() {
-      trySync();
-      attempts++;
-      if (attempts >= 50) clearInterval(interval);
-    }, 100);
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startApp);
-  } else {
-    startApp();
-  }
 })();
+</script>
 </body>
 </html>
