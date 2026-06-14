@@ -1457,24 +1457,29 @@ body::after {
   });
 
   // Wait for sync.js to initialize before booting
+  // sync.js is loaded with defer, so it runs after DOMContentLoaded
+  // We use a small delay or check for initCloudSync availability
+  function startApp() {
+    boot();
+    var trySync = function() {
+      if (typeof initCloudSync === 'function') {
+        initCloudSync({
+          appKey: 'goals',
+          syncedKeys: ['goals:history'],
+          syncedPrefixes: ['goals:'],
+          onApplied: function() { loadToday(); loadTomorrow(); renderStreak(); renderCalendar(); renderStats(); }
+        });
+      }
+    };
+    // Try immediately (in case sync.js already loaded)
+    trySync();
+    // Also try after a short delay for deferred scripts
+    setTimeout(trySync, 100);
+  }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      if (typeof initCloudSync === 'function') initCloudSync({
-        appKey: 'goals',
-        syncedKeys: ['goals:history'],
-        syncedPrefixes: ['goals:'],
-        onApplied: () => boot()
-      });
-      else boot();
-    });
+    document.addEventListener('DOMContentLoaded', startApp);
   } else {
-    if (typeof initCloudSync === 'function') initCloudSync({
-      appKey: 'goals',
-      syncedKeys: ['goals:history'],
-      syncedPrefixes: ['goals:'],
-      onApplied: () => boot()
-    });
-    else boot();
+    startApp();
   }
 })();
 </body>
