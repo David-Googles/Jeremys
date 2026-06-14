@@ -587,6 +587,77 @@ body::after {
 }
 .gm-status.gm-status-error { color: var(--danger); }
 
+/* ===== Calendar History ===== */
+.cal-nav { display: flex; gap: 6px; }
+.cal-nav-btn {
+  width: 32px; height: 32px; padding: 0;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px; background: rgba(255,255,255,0.04);
+  color: var(--text-primary); font-size: 18px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.cal-nav-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); }
+
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 4px; margin-bottom: 8px;
+}
+.cal-weekday {
+  text-align: center; font-family: var(--font-mono);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-tertiary);
+  padding: 4px 0;
+}
+
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 4px; margin-bottom: 16px;
+}
+.cal-day {
+  aspect-ratio: 1 / 1; border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; position: relative; transition: all 0.2s;
+  font-size: 13px; color: var(--text-secondary);
+}
+.cal-day:hover { background: rgba(255,255,255,0.05); }
+.cal-day.today { border-color: var(--success); color: var(--text-primary); }
+.cal-day.today::after {
+  content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%; background: var(--success);
+}
+.cal-day.selected {
+  background: rgba(242,192,99,0.15);
+  border-color: var(--warning); color: var(--text-primary);
+}
+.cal-day.other-month { color: var(--text-tertiary); opacity: 0.4; }
+.cal-day.has-goals { color: var(--text-primary); }
+.cal-day.fire::before {
+  content: '🔥'; position: absolute; top: 2px; right: 4px;
+  font-size: 10px;
+}
+.cal-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--success); margin-top: 2px;
+}
+
+.cal-details {
+  margin-top: 8px; padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.cal-details-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.cal-details-date { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.cal-details-percent { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
+
+@media (max-width: 480px) {
+  .cal-day { font-size: 11px; }
+  .cal-nav-btn { width: 28px; height: 28px; font-size: 15px; }
+}
+
 @media (max-width: 480px) {
   body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
   .gm-card { padding: 16px; }
@@ -686,6 +757,34 @@ body::after {
         <button type="button" id="tomorrowAddBtn"    class="gm-add">+ Add</button>
         <button type="button" id="tomorrowPolishBtn" class="gm-polish">✨ Polish</button>
         <div class="gm-status" id="tomorrowStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CALENDAR HISTORY -->
+  <div class="section">
+    <div class="section-title">Calendar History</div>
+    <div class="gm-card">
+      <div class="gm-header">
+        <div class="gm-header-left">
+          <div class="gm-eyebrow" id="calMonthLabel">June 2026</div>
+        </div>
+        <div class="cal-nav">
+          <button type="button" id="calPrevBtn" class="gm-ghost cal-nav-btn" title="Previous month">‹</button>
+          <button type="button" id="calNextBtn" class="gm-ghost cal-nav-btn" title="Next month">›</button>
+        </div>
+      </div>
+      <div class="cal-weekdays">
+        <div class="cal-weekday">Sun</div><div class="cal-weekday">Mon</div><div class="cal-weekday">Tue</div><div class="cal-weekday">Wed</div><div class="cal-weekday">Thu</div><div class="cal-weekday">Fri</div><div class="cal-weekday">Sat</div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-details" id="calDetails">
+        <div class="cal-details-header">
+          <span class="cal-details-date" id="calDetailsDate">Select a date</span>
+          <span class="cal-details-percent" id="calDetailsPercent"></span>
+        </div>
+        <ul class="goal-list" id="calDetailsList"></ul>
+        <div class="empty-state" id="calDetailsEmpty">No goals for this date.</div>
       </div>
     </div>
   </div>
@@ -869,6 +968,7 @@ body::after {
   window.addEventListener('goals-changed', () => {
     cycleIdx = 0;
     tick();
+    buildCalendar();
   });
 
   // ---------- Day Ring ----------
@@ -1290,6 +1390,147 @@ body::after {
     loadTomorrow
   );
 
+  // ---------- Calendar History ----------
+  let calState = { month: new Date().getMonth(), year: new Date().getFullYear() };
+  let selectedDate = null;
+
+  function getDayStats(dateStr) {
+    const goals = getGoals('goals:' + dateStr);
+    if (goals.length === 0) return null;
+    const done = goals.filter(g => g.done).length;
+    const total = goals.length;
+    const percent = Math.round((done / total) * 100);
+    return { done, total, percent };
+  }
+
+  function buildCalendar() {
+    const grid = document.getElementById('calGrid');
+    const monthLabel = document.getElementById('calMonthLabel');
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    monthLabel.textContent = monthNames[calState.month] + ' ' + calState.year;
+    grid.innerHTML = '';
+
+    const firstOfMonth = new Date(calState.year, calState.month, 1);
+    const lastOfMonth = new Date(calState.year, calState.month + 1, 0);
+    const startDay = firstOfMonth.getDay();
+    const daysInMonth = lastOfMonth.getDate();
+
+    const prevMonthDays = new Date(calState.year, calState.month, 0).getDate();
+    const today = new Date();
+    const todayStr = dateToKey(today);
+
+    // Previous month days (disabled state)
+    for (let i = startDay - 1; i >= 0; i--) {
+      const d = new Date(calState.year, calState.month - 1, prevMonthDays - i);
+      const dateStr = dateToKey(d);
+      const dayEl = document.createElement('div');
+      dayEl.className = 'cal-day other-month';
+      dayEl.textContent = (prevMonthDays - i);
+      dayEl.dataset.date = dateStr;
+      grid.appendChild(dayEl);
+    }
+
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(calState.year, calState.month, d);
+      const dateStr = dateToKey(date);
+      const dayEl = document.createElement('div');
+      dayEl.className = 'cal-day';
+      if (dateStr === todayStr) dayEl.classList.add('today');
+      dayEl.textContent = d;
+      dayEl.dataset.date = dateStr;
+
+      const stats = getDayStats(dateStr);
+      if (stats) {
+        dayEl.classList.add('has-goals');
+        if (stats.percent > 65) dayEl.classList.add('fire');
+        const dot = document.createElement('div');
+        dot.className = 'cal-dot';
+        dayEl.appendChild(dot);
+      }
+
+      dayEl.addEventListener('click', () => {
+        selectedDate = dateStr;
+        document.querySelectorAll('.cal-day.selected').forEach(el => el.classList.remove('selected'));
+        dayEl.classList.add('selected');
+        showDayDetails(dateStr);
+      });
+
+      grid.appendChild(dayEl);
+    }
+
+    // Next month fillers
+    const totalCells = 42;
+    const usedCells = startDay + daysInMonth;
+    const remaining = totalCells - usedCells;
+    for (let d = 1; d <= remaining; d++) {
+      const dayEl = document.createElement('div');
+      dayEl.className = 'cal-day other-month';
+      dayEl.textContent = d;
+      grid.appendChild(dayEl);
+    }
+  }
+
+  function showDayDetails(dateStr) {
+    const detailsDate = document.getElementById('calDetailsDate');
+    const detailsPercent = document.getElementById('calDetailsPercent');
+    const detailsList = document.getElementById('calDetailsList');
+    const detailsEmpty = document.getElementById('calDetailsEmpty');
+
+    detailsDate.textContent = formatDate(dateStr);
+    detailsList.innerHTML = '';
+
+    const goals = getGoals('goals:' + dateStr);
+    const stats = getDayStats(dateStr);
+
+    if (stats) {
+      detailsPercent.textContent = stats.done + '/' + stats.total + ' done';
+      document.getElementById('calDetails').style.display = 'block';
+      detailsEmpty.style.display = goals.length === 0 ? 'block' : 'none';
+
+      goals.forEach((g, i) => {
+        const li = document.createElement('li');
+        li.className = 'gm-row' + (g.done ? ' gm-row-done' : '');
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'gm-check';
+        cb.checked = !!g.done;
+        cb.disabled = true;
+        li.appendChild(cb);
+
+        const text = document.createElement('span');
+        text.className = 'gm-text';
+        text.textContent = g.text;
+        li.appendChild(text);
+
+        detailsList.appendChild(li);
+      });
+    } else {
+      detailsPercent.textContent = '';
+      document.getElementById('calDetails').style.display = 'none';
+    }
+  }
+
+  document.getElementById('calPrevBtn').addEventListener('click', () => {
+    calState.month--;
+    if (calState.month < 0) {
+      calState.month = 11;
+      calState.year--;
+    }
+    buildCalendar();
+  });
+
+  document.getElementById('calNextBtn').addEventListener('click', () => {
+    calState.month++;
+    if (calState.month > 11) {
+      calState.month = 0;
+      calState.year++;
+    }
+    buildCalendar();
+  });
+
   // ---------- Boot ----------
   rollover();
   processStreak();
@@ -1299,10 +1540,13 @@ body::after {
   updateDayRing();
   setInterval(updateDayRing, 60 * 1000);
   startTicker();
+  buildCalendar();
 
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
     loadToday(); loadTomorrow(); renderStreak();
+    if (selectedDate) showDayDetails(selectedDate);
+    else buildCalendar();
   });
 })();
 </script>
