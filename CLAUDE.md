@@ -17,10 +17,10 @@
 ### Files
 | File | Role |
 |---|---|
-| `index.html` | Main "Goals" dashboard (daily checkboxes, ticker). Title: "majds dashboard". |
+| `index.html` | Bento grid hub (landing page with links to other trackers). |
 | `health.html` | Daily Stack (supplements checklist) + embeds `po-water.html` in an iframe. |
 | `gym.html` | Gym/workout tracker with photo log. Has its own bottom tab bar. |
-| `main.html` |  Main "Goals" dashboard (daily checkboxes, ticker). Title: "majds dashboard". |
+| `main.html` | Main "Goals" dashboard (daily checkboxes, ticker, calendar/history/stats). Title: "majds dashboard". |
 | `finance.html` | Net worth, subs, wishlist, incoming orders. Has its own internal 4-tab nav. |
 | `po-water.html` | Water tracker. Standalone or embedded in `health.html` iframe. |
 | `topbar.js` | Self-injects compact topbar (water + 📊 finance) and Instagram-style bottombar (Main/Health/Fitness). Skips chrome on `finance.html` and inside iframes. |
@@ -37,7 +37,7 @@
 - **Table:** `public.app_state` (rows keyed by `key` string, `data` jsonb, `updated_at` timestamptz)
 - **RLS:** anon select/insert/update enabled
 - **Used in:** `sync.js` (lines ~11-12), `topbar.js` (lines ~17-18), `gym.html` (lines ~3281-3282)
-- **App keys per page:** `goals` (index), `health` (health + po-water), `finance`, `gym` (gym.html has its own sync code)
+- **App keys per page:** `goals` (main.html), `health` (health.html + po-water), `finance`, `gym` (gym.html has its own sync code)
 
 ### Git identity (set locally on this repo, not globally)
 ```bash
