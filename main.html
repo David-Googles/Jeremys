@@ -982,11 +982,17 @@ body::after {
   }
 
   const C = 2 * Math.PI * 52;
-  const fillEl = document.getElementById('dayRingFill');
-  fillEl.setAttribute('stroke-dasharray', C);
-  fillEl.setAttribute('stroke-dashoffset', C);
+  let fillEl = null;
+  function initDayRing() {
+    fillEl = document.getElementById('dayRingFill');
+    if (fillEl) {
+      fillEl.setAttribute('stroke-dasharray', C);
+      fillEl.setAttribute('stroke-dashoffset', C);
+    }
+  }
 
   function updateDayRing() {
+    if (!fillEl) return;
     const now = new Date();
     const hours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
     const percentEl   = document.getElementById('dayRingPercent');
@@ -994,6 +1000,7 @@ body::after {
     const clockEl     = document.getElementById('dayRingClock');
     const statusEl    = document.getElementById('dayRingStatus');
     const remainingEl = document.getElementById('dayRingRemaining');
+    if (!percentEl || !phaseEl || !clockEl || !statusEl || !remainingEl) return;
 
     clockEl.textContent = formatClock(now);
 
@@ -1209,6 +1216,7 @@ body::after {
   }
 
   function renderListInto(goals, listEl, emptyEl, key, readOnly) {
+    if (!listEl || !emptyEl) return;
     listEl.innerHTML = '';
     emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
     const reload = () => (key === todayKey() ? loadToday() : loadTomorrow());
@@ -1289,6 +1297,18 @@ body::after {
       container.appendChild(btn);
     });
   }
+    dates.forEach(d => {
+      const info = h[d];
+      const btn = document.createElement('button');
+      btn.className = 'cal-day';
+      btn.dataset.date = d;
+      btn.innerHTML = '<span class="cal-date">' + d.split('-')[1] + '/' + d.split('-')[2] + '</span><span class="cal-pct">' + info.pct + '%</span>';
+      if (info.pct === 100) btn.classList.add('cal-done');
+      else if (info.pct >= 50) btn.classList.add('cal-partial');
+      else btn.classList.add('cal-miss');
+      container.appendChild(btn);
+    });
+  }
 
   // ---------- Stats ----------
   function getStats() {
@@ -1305,9 +1325,10 @@ body::after {
     const daysEl = document.getElementById('statsDays');
     const pctEl = document.getElementById('statsPct');
     const barEl = document.getElementById('statsBar');
-    if (daysEl) daysEl.textContent = stats.totalDays + ' days';
-    if (pctEl) pctEl.textContent = stats.totalGoals > 0 ? stats.overall + '% done' : '—';
-    if (barEl) {
+    if (!daysEl || !pctEl || !barEl) return;
+    daysEl.textContent = stats.totalDays + ' days';
+    pctEl.textContent = stats.totalGoals > 0 ? stats.overall + '% done' : '—';
+    barEl.innerHTML = '';
       barEl.innerHTML = '';
       if (stats.totalGoals > 0) {
         const segments = 10;
@@ -1431,6 +1452,7 @@ body::after {
   const boot = () => {
     rollover();
     processStreak();
+    initDayRing();
     loadToday();
     loadTomorrow();
     renderStreak();
@@ -1462,7 +1484,7 @@ body::after {
   function startApp() {
     boot();
     var trySync = function() {
-      if (typeof initCloudSync === 'function') {
+      if (typeof window.supabase !== 'undefined' && typeof initCloudSync === 'function') {
         initCloudSync({
           appKey: 'goals',
           syncedKeys: ['goals:history'],
@@ -1475,6 +1497,13 @@ body::after {
     trySync();
     // Also try after a short delay for deferred scripts
     setTimeout(trySync, 100);
+    // Keep trying for up to 5 seconds to let all scripts load
+    var attempts = 1;
+    var interval = setInterval(function() {
+      trySync();
+      attempts++;
+      if (attempts >= 50) clearInterval(interval);
+    }, 100);
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', startApp);
