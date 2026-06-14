@@ -767,6 +767,26 @@ img, video, canvas, svg { max-width: 100%; }
 }
 .po-tw-summary-sep { color: var(--text-4); margin: 0 4px; }
 .po-tw-summary-vol { font-size: 13px; color: var(--text-2); font-weight: 500; }
+.po-tw-date-select { position: relative; margin-top: 4px; }
+.po-tw-date-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 8px; padding: 6px 10px; font-size: 11px; color: var(--text-2);
+  cursor: pointer; display: flex; align-items: center; gap: 4px;
+}
+.po-tw-date-btn:hover { background: rgba(255,255,255,0.04); }
+.po-tw-date-arrow { font-size: 10px; }
+.po-tw-date-dropdown {
+  position: absolute; top: 100%; left: 0; margin-top: 4px;
+  background: rgba(10,10,11,0.95); backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.10); border-radius: 8px;
+  padding: 4px 0; z-index: 100; min-width: 140px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.po-tw-date-option {
+  padding: 8px 12px; font-size: 12px; color: var(--text-1);
+  cursor: pointer; white-space: nowrap;
+}
+.po-tw-date-option:hover { background: rgba(255,255,255,0.06); }
 .po-tw-done-btn {
   background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
   color: #0a0a0b; border: none; border-radius: 999px;
@@ -1562,6 +1582,21 @@ img, video, canvas, svg { max-width: 100%; }
         <div class="po-tw-head">
           <div>
             <div class="po-tw-eyebrow" id="poTwDateLabel">TODAY</div>
+            <div class="po-tw-date-select">
+              <button type="button" id="poTwDateBtn" class="po-tw-date-btn">
+                <span id="poTwDateDisplay">Today</span> <span class="po-tw-date-arrow">▾</span>
+              </button>
+              <div class="po-tw-date-dropdown" id="poTwDateDropdown" style="display:none">
+                <div class="po-tw-date-option" data-days="0">Today</div>
+                <div class="po-tw-date-option" data-days="1">Yesterday</div>
+                <div class="po-tw-date-option" data-days="2">2 days ago</div>
+                <div class="po-tw-date-option" data-days="3">3 days ago</div>
+                <div class="po-tw-date-option" data-days="4">4 days ago</div>
+                <div class="po-tw-date-option" data-days="5">5 days ago</div>
+                <div class="po-tw-date-option" data-days="6">6 days ago</div>
+                <div class="po-tw-date-option" data-days="7">7 days ago</div>
+              </div>
+            </div>
             <div class="po-tw-summary">
               <span class="po-tw-summary-num" id="poTwSetCount">0</span>
               <span class="po-tw-summary-label">sets</span>
@@ -2095,6 +2130,16 @@ img, video, canvas, svg { max-width: 100%; }
     try { localStorage.setItem(WORKOUT_DONE_KEY, JSON.stringify(d)); } catch (e) {}
   }
   let doneDays = loadDoneDays();
+  let selectedWorkoutDate = null; // YYYY-MM-DD or null for today
+
+  function poTwDateKey(daysAgo) {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const y = d.getFullYear();
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
 
   function logsByDay() {
     const byDay = {};
@@ -2131,17 +2176,30 @@ img, video, canvas, svg { max-width: 100%; }
   }
 
   function renderTodaysWorkout() {
-    const todayKey = wtDateKey(new Date());
+    const activeKey = selectedWorkoutDate || wtDateKey(new Date());
     const all = logsByDay();
-    const todaySets = all[todayKey] || [];
+    const todaySets = all[activeKey] || [];
     const sum = summarizeDay(todaySets);
     const u = state.units;
+    const isToday = !selectedWorkoutDate;
 
     const eyebrow = $('poTwDateLabel');
     const dows = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
     const mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     const d = new Date();
-    eyebrow.textContent = 'TODAY · ' + dows[d.getDay()] + ', ' + mons[d.getMonth()] + ' ' + d.getDate();
+    if (isToday) {
+      eyebrow.textContent = 'TODAY · ' + dows[d.getDay()] + ', ' + mons[d.getMonth()] + ' ' + d.getDate();
+      $('poTwDateDisplay').textContent = 'Today';
+    } else {
+      // Calculate human-readable label for selected date
+      const [y, m, day] = activeKey.split('-').map(Number);
+      const selDate = new Date(y, m - 1, day);
+      const daysAgo = Math.floor((new Date() - selDate) / (1000 * 60 * 60 * 24));
+      if (daysAgo === 1) $('poTwDateDisplay').textContent = 'Yesterday';
+      else if (daysAgo > 1 && daysAgo <= 7) $('poTwDateDisplay').textContent = daysAgo + ' days ago';
+      else $('poTwDateDisplay').textContent = mons[m - 1] + ' ' + day;
+      eyebrow.textContent = dows[selDate.getDay()] + ', ' + mons[selDate.getMonth()] + ' ' + selDate.getDate();
+    }
 
     $('poTwSetCount').textContent = sum.totalSets;
     $('poTwTotalVol').textContent = Math.round(sum.totalVol).toLocaleString() + ' ' + u + ' lifted';
@@ -2151,6 +2209,7 @@ img, video, canvas, svg { max-width: 100%; }
     if (sum.totalSets === 0) {
       list.innerHTML = '';
       empty.classList.remove('hidden');
+      empty.textContent = isToday ? 'No sets logged today — log one above and it\'ll appear here.' : 'No workouts logged for this date.';
     } else {
       empty.classList.add('hidden');
       list.innerHTML = sum.perEx.map(e => {
@@ -2169,18 +2228,24 @@ img, video, canvas, svg { max-width: 100%; }
 
     // Done button state
     const btn = $('poTwDoneBtn');
-    const isDone = !!doneDays[todayKey];
+    const isDone = !!doneDays[activeKey];
     btn.textContent = isDone ? '✓ Done' : 'Mark workout done';
     btn.classList.toggle('is-done', isDone);
     btn.disabled = sum.totalSets === 0 && !isDone;
     btn.style.opacity = btn.disabled ? '0.4' : '';
+    btn.dataset.dateKey = activeKey;
   }
 
   function renderPastWorkouts() {
     const todayKey = wtDateKey(new Date());
     const all = logsByDay();
+    // Show last 7 days of past workouts
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoKey = wtDateKey(weekAgo);
     const past = Object.entries(all)
-      .filter(([dk]) => dk !== todayKey)
+      .filter(([dk]) => dk !== todayKey && dk >= weekAgoKey)
       .sort((a, b) => b[0].localeCompare(a[0]));
     $('poTwPastCount').textContent = past.length;
     const body = $('poTwPastBody');
@@ -2194,7 +2259,7 @@ img, video, canvas, svg { max-width: 100%; }
       const isDone = !!doneDays[dk];
       const exNames = sum.perEx.map(e => e.ex.name).slice(0, 3).join(', ')
         + (sum.perEx.length > 3 ? '…' : '');
-      return '<div class="po-tw-past-day">'
+      return '<div class="po-tw-past-day" data-date-key="' + dk + '" style="cursor:pointer">'
         + '<div class="po-tw-past-day-h">'
         +   '<span class="po-tw-past-day-date">' + fmtPastDate(dk) + '</span>'
         +   '<span class="po-tw-past-day-summary">'
@@ -2210,15 +2275,49 @@ img, video, canvas, svg { max-width: 100%; }
   }
 
   $('poTwDoneBtn').addEventListener('click', () => {
-    const todayKey = wtDateKey(new Date());
-    if (doneDays[todayKey]) {
-      delete doneDays[todayKey];
+    const activeKey = selectedWorkoutDate || wtDateKey(new Date());
+    if (doneDays[activeKey]) {
+      delete doneDays[activeKey];
     } else {
-      doneDays[todayKey] = new Date().toISOString();
+      doneDays[activeKey] = new Date().toISOString();
     }
     saveDoneDays(doneDays);
     renderTodaysWorkout();
     renderPastWorkouts();
+  });
+
+  // Date selector dropdown
+  document.addEventListener('click', (e) => {
+    const dd = $('poTwDateDropdown');
+    if (dd && dd.style.display === 'block' && !e.target.closest('.po-tw-date-select')) {
+      dd.style.display = 'none';
+    }
+  });
+  $('poTwDateBtn').addEventListener('click', () => {
+    const dd = $('poTwDateDropdown');
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+  });
+  document.querySelectorAll('.po-tw-date-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const days = parseInt(opt.dataset.days, 10);
+      selectedWorkoutDate = days === 0 ? null : poTwDateKey(days);
+      $('poTwDateDropdown').style.display = 'none';
+      renderTodaysWorkout();
+      renderPastWorkouts();
+    });
+  });
+
+  // Past workout click to view details
+  $('poTwPastBody').addEventListener('click', (e) => {
+    const dayEl = e.target.closest('.po-tw-past-day');
+    if (!dayEl) return;
+    const dateKey = dayEl.getAttribute('data-date-key');
+    if (dateKey) {
+      selectedWorkoutDate = dateKey;
+      renderTodaysWorkout();
+      $('poTwPastBody').style.display = 'none';
+      $('poTwPastToggle').setAttribute('aria-expanded', 'false');
+    }
   });
   $('poTwPastToggle').addEventListener('click', () => {
     const body = $('poTwPastBody');
@@ -2279,7 +2378,8 @@ img, video, canvas, svg { max-width: 100%; }
     const w = ex.bw ? 0 : (parseFloat($('weightInput').value) || 0);
     if (!ex.bw && w <= 0) { alert('Enter a weight.'); return; }
     const arr = state.logs[ex.id] || [];
-    arr.push({ weight: w, reps: reps, date: new Date().toISOString() });
+    const logDate = selectedWorkoutDate || wtDateKey(new Date());
+    arr.push({ weight: w, reps: reps, date: logDate + 'T12:00:00.000Z' });
     state.logs[ex.id] = arr;
     saveState(); renderAll();
     // Strength changed → composition estimate may shift

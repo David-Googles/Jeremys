@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
 <title>My Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
 <script src="topbar.js" defer></script>
 <style>
 :root {
@@ -1540,6 +1542,15 @@ body::after {
   setInterval(updateDayRing, 60 * 1000);
   startTicker();
   buildCalendar();
+
+  // Cloud sync
+  if (window.initCloudSync) {
+    window.initCloudSync({
+      appKey: 'goals',
+      syncedPrefixes: ['goals:'],
+      onApplied: buildCalendar
+    });
+  }
 
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
