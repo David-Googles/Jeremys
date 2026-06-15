@@ -1582,15 +1582,18 @@ body::after {
   // Seed the title key so it can sync across devices.
   if (!localStorage.getItem(TITLE_KEY)) saveTitle(loadTitle());
 
-  // Cloud sync
-  if (window.initCloudSync) {
-    window.initCloudSync({
-      appKey: 'goals',
-      syncedKeys: [TITLE_KEY, 'goal_streak_v1'],
-      syncedPrefixes: ['goals:'],
-      onApplied: renderAllMain
-    });
-  }
+  // Cloud sync - initialize after supabase loads
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.initCloudSync && !window._cloudSyncInitialized) {
+      window._cloudSyncInitialized = true;
+      window.initCloudSync({
+        appKey: 'goals',
+        syncedKeys: [TITLE_KEY, 'goal_streak_v1'],
+        syncedPrefixes: ['goals:'],
+        onApplied: renderAllMain
+      });
+    }
+  });
 
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
