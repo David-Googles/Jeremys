@@ -816,6 +816,9 @@ img, video, canvas, svg { max-width: 100%; }
 }
 .po-tw-row-name { font-weight: 600; color: var(--text-1); }
 .po-tw-row-meta {
+  min-width: 0;
+  text-align: right;
+  white-space: normal;
   font-size: 11px; color: var(--text-3);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -1470,6 +1473,13 @@ img, video, canvas, svg { max-width: 100%; }
         <span class="po-seg-label">Day</span>
         <div class="po-seg-control" id="daySeg"></div>
       </div>
+      <div class="po-seg-row">
+        <span class="po-seg-label">Unit</span>
+        <div class="po-seg-control" id="unitSeg">
+          <button type="button" class="po-seg-btn" data-u="kg">kg</button>
+          <button type="button" class="po-seg-btn" data-u="lb">lb</button>
+        </div>
+      </div>
     </div>
 
     <!-- Exercise -->
@@ -1746,7 +1756,7 @@ img, video, canvas, svg { max-width: 100%; }
   }
   function normalize(s) {
     s = s || {};
-    s.units = s.units || CONFIG.units || 'kg';
+    s.units = ['kg', 'lb'].includes(s.units) ? s.units : (CONFIG.units || 'kg');
     s.gyms  = (Array.isArray(s.gyms)  && s.gyms.length)  ? s.gyms  : CONFIG.gyms.slice();
     s.days  = (Array.isArray(s.days)  && s.days.length)  ? s.days  : CONFIG.days.slice();
     s.exercises = Array.isArray(s.exercises) ? s.exercises : buildDefaultExercises();
@@ -1808,6 +1818,37 @@ img, video, canvas, svg { max-width: 100%; }
   }
   function getLogs() { return (state.logs[state.currentEx] || []).slice(); }
 
+  function convertWeightValue(v, from, to) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || from === to) return n || 0;
+    const kg = from === 'kg' ? n : n / 2.2046226218;
+    const out = to === 'kg' ? kg : kg * 2.2046226218;
+    return Math.round(out * 100) / 100;
+  }
+
+  function convertStoredWeights(from, to) {
+    if (from === to || !['kg', 'lb'].includes(from) || !['kg', 'lb'].includes(to)) return;
+    state.exercises.forEach(ex => {
+      if (!ex.bw) {
+        ex.startWeight = convertWeightValue(ex.startWeight, from, to);
+        ex.step = convertWeightValue(ex.step, from, to);
+      }
+      (state.logs[ex.id] || []).forEach(l => {
+        if (!ex.bw) l.weight = convertWeightValue(l.weight, from, to);
+      });
+    });
+  }
+
+  function setUnits(next) {
+    if (!['kg', 'lb'].includes(next) || next === state.units) return;
+    const from = state.units;
+    convertStoredWeights(from, next);
+    state.units = next;
+    saveState();
+    renderAll();
+    if (typeof wtRender === 'function') wtRender();
+  }
+
   // Prescription engine — "what should I do next session?"
   // Upgrade trigger: hits CONFIG.upgradeAtReps (default 8) OR the
   // exercise's repMax, whichever fires first. So a 5-8 lifter hits
@@ -1859,6 +1900,11 @@ img, video, canvas, svg { max-width: 100%; }
         saveState(); renderAll();
       });
     });
+    $('unitSeg').innerHTML = '<button type="button" class="po-seg-btn ' + (state.units === 'kg' ? 'active' : '') + '" data-u="kg">kg</button>'
+      + '<button type="button" class="po-seg-btn ' + (state.units === 'lb' ? 'active' : '') + '" data-u="lb">lb</button>';
+    $('unitSeg').querySelectorAll('.po-seg-btn').forEach(b => {
+      b.addEventListener('click', () => setUnits(b.dataset.u));
+    });
   }
   function renderSelect() {
     const sel = $('exSelect');
@@ -1876,7 +1922,7 @@ img, video, canvas, svg { max-width: 100%; }
     noMsg.style.display = 'none';
     if (!f.find(e => e.id === state.currentEx)) state.currentEx = f[0].id;
     sel.innerHTML = f.map(e => {
-      const wLbl = e.bw ? ' · BW' : (e.startWeight ? ' · ' + e.startWeight + unit() : '');
+      const wLbl = e.bw ? ' · BW' : (e.startWeight ? ' · ' + fmtWorkoutWeight(e.startWeight, unit()) : '');
       const sh = e.gym === 'both' ? ' ★' : '';
       return '<option value="' + e.id + '"' + (e.id === state.currentEx ? ' selected' : '') + '>' + escape(e.name) + wLbl + sh + '</option>';
     }).join('');
@@ -1960,7 +2006,7 @@ img, video, canvas, svg { max-width: 100%; }
       const bestVal = ex.bw ? best.reps : estimate1RM(best.weight, best.reps);
       if (cur > bestVal) best = l;
     });
-    $('bestSet').textContent = ex.bw ? (best.reps + 'r') : (best.weight + '×' + best.reps);
+    $('bestSet').textContent = ex.bw ? (best.reps + 'r') : (fmtWorkoutWeight(best.weight, unit()) + '×' + best.reps);
     $('sessionCount').textContent = logs.length;
   }
   function renderSparkline() {
@@ -1991,33 +2037,50 @@ img, video, canvas, svg { max-width: 100%; }
       + '<path class="po-spark-fill" d="' + fillPath + '"/>'
       + '<path class="po-spark-line" d="' + linePath + '"/>';
   }
+  function fmtHistoryDate(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
   function renderHistory() {
     const wrap = $('historyCard');
     const ex = getCurrentEx();
-    const logs = ex ? getLogs().slice().reverse() : [];
+    const logs = ex ? getLogs() : [];
     if (!logs.length) {
       wrap.innerHTML = '<div class="po-empty">No logs yet.</div>';
       return;
     }
-    wrap.innerHTML = logs.slice(0, 12).map((l, i) => {
-      const d = new Date(l.date);
-      const dStr = (d.getMonth() + 1) + '/' + d.getDate();
-      const setStr = ex.bw ? (l.reps + ' reps') : (l.weight + unit() + ' × ' + l.reps);
-      const realIdx = logs.length - 1 - i; // since we reversed
-      return '<div class="po-hist-row">'
-        + '<div class="po-hist-date">' + dStr + '</div>'
-        + '<div class="po-hist-set">' + setStr + '</div>'
-        + '<button class="po-hist-del" data-idx="' + realIdx + '" aria-label="Delete">×</button>'
-        + '</div>';
+
+    const byDay = {};
+    logs.forEach((l, idx) => {
+      const dk = l.date ? l.date.slice(0, 10) : '';
+      if (!byDay[dk]) byDay[dk] = [];
+      byDay[dk].push({ log: l, idx });
+    });
+
+    const dates = Object.keys(byDay).sort().reverse();
+    wrap.innerHTML = dates.slice(0, 12).map(dk => {
+      const dayRows = byDay[dk].map((entry, i) => {
+        const dateLabel = i === 0 ? fmtHistoryDate(entry.log.date) : '';
+        const setStr = ex.bw
+          ? ('set ' + (i + 1) + ' · ' + entry.log.reps + ' reps')
+          : ('set ' + (i + 1) + ' · ' + fmtWorkoutWeight(entry.log.weight, unit()) + ' × ' + entry.log.reps);
+        return '<div class="po-hist-row">'
+          + '<div class="po-hist-date">' + escape(dateLabel) + '</div>'
+          + '<div class="po-hist-set">' + escape(setStr) + '</div>'
+          + '<button class="po-hist-del" data-idx="' + entry.idx + '" aria-label="Delete">×</button>'
+          + '</div>';
+      }).join('');
+      return '<div class="po-hist-day">' + dayRows + '</div>';
     }).join('');
+
     wrap.querySelectorAll('.po-hist-del').forEach(b => {
       b.addEventListener('click', () => {
         if (!confirm('Delete this log?')) return;
         const realIdx = parseInt(b.dataset.idx, 10);
         const arr = state.logs[state.currentEx] || [];
-        // realIdx is index in REVERSED list; map back to original
-        const origIdx = arr.length - 1 - realIdx;
-        arr.splice(origIdx, 1);
+        arr.splice(realIdx, 1);
         if (!arr.length) delete state.logs[state.currentEx];
         else state.logs[state.currentEx] = arr;
         saveState(); renderAll();
@@ -2175,6 +2238,36 @@ img, video, canvas, svg { max-width: 100%; }
     return { perEx, totalSets, totalVol };
   }
 
+  function fmtWorkoutWeight(w, u) {
+    const num = Number(w);
+    if (!Number.isFinite(num)) return '0 ' + u;
+    const text = Number.isInteger(num) ? String(num) : num.toFixed(1).replace(/\.0$/, '');
+    return text + ' ' + u;
+  }
+
+  function fmtWorkoutTime(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const h12 = ((d.getHours() + 11) % 12) + 1;
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return h12 + ':' + m + ' ' + (d.getHours() >= 12 ? 'PM' : 'AM');
+  }
+
+  function renderWorkoutSetRows(perEx, u) {
+    return perEx.map(e => {
+      return e.sets.map((s, i) => {
+        const reps = Number.isFinite(Number(s.reps)) ? Number(s.reps) : 0;
+        const weight = e.ex.bw ? 'bodyweight' : fmtWorkoutWeight(s.weight, u);
+        const time = s.date ? ' · ' + escape(fmtWorkoutTime(s.date)) : '';
+
+        return '<li class="po-tw-row">'
+          + '<span class="po-tw-row-name">' + escape(e.ex.name) + ' · set ' + (i + 1) + '</span>'
+          + '<span class="po-tw-row-meta">' + reps + ' reps × ' + escape(weight) + time + '</span>'
+          + '</li>';
+      }).join('');
+    }).join('');
+  }
+
   function renderTodaysWorkout() {
     const activeKey = selectedWorkoutDate || wtDateKey(new Date());
     const all = logsByDay();
@@ -2212,18 +2305,7 @@ img, video, canvas, svg { max-width: 100%; }
       empty.textContent = isToday ? 'No sets logged today — log one above and it\'ll appear here.' : 'No workouts logged for this date.';
     } else {
       empty.classList.add('hidden');
-      list.innerHTML = sum.perEx.map(e => {
-        const top = e.ex.bw
-          ? 'top ' + Math.max.apply(null, e.sets.map(s => s.reps)) + ' reps'
-          : 'top ' + Math.max.apply(null, e.sets.map(s => s.weight)) + u;
-        const meta = e.ex.bw
-          ? (e.sets.length + ' set' + (e.sets.length === 1 ? '' : 's') + ' · ' + top)
-          : (e.sets.length + ' set' + (e.sets.length === 1 ? '' : 's') + ' · ' + top + ' · ' + Math.round(e.vol) + u + ' total');
-        return '<li class="po-tw-row">'
-          + '<span class="po-tw-row-name">' + escape(e.ex.name) + '</span>'
-          + '<span class="po-tw-row-meta">' + meta + '</span>'
-          + '</li>';
-      }).join('');
+      list.innerHTML = renderWorkoutSetRows(sum.perEx, u);
     }
 
     // Done button state
@@ -2655,12 +2737,7 @@ img, video, canvas, svg { max-width: 100%; }
     renderAll();
   });
   $('setUnitsSeg').querySelectorAll('button').forEach(b => {
-    b.addEventListener('click', () => {
-      state.units = b.dataset.u; saveState();
-      $('setUnitsSeg').querySelectorAll('button').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      if (typeof wtRender === 'function') wtRender();
-    });
+    b.addEventListener('click', () => setUnits(b.dataset.u));
   });
   $('setAddGym').addEventListener('click', () => {
     const name = (prompt('New gym name:') || '').trim();
@@ -2768,14 +2845,14 @@ img, video, canvas, svg { max-width: 100%; }
     const u = state.units;
 
     // Sync unit labels everywhere
-    $('wtUnit').textContent = u;
-    $('wtUnitStatic').textContent = u;
+    $('wtUnit').textContent = 'kg';
+    $('wtUnitStatic').textContent = 'kg';
     $('wtNum').textContent = last ? last.weight.toFixed(1) : '—';
 
     // Locked vs input
     if (todayEntry) {
       $('wtEmpty').classList.add('hidden');
-      $('wtLockedValue').textContent = todayEntry.weight.toFixed(1) + ' ' + u;
+      $('wtLockedValue').textContent = todayEntry.weight.toFixed(1) + ' ' + 'kg';
       $('wtLocked').classList.remove('hidden');
       $('wtInputRow').classList.add('hidden');
     } else {
