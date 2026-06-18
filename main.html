@@ -855,9 +855,96 @@ body::after {
 
   function getGoals(key) {
     const g = storeGet(key);
-    return Array.isArray(g) ? g : [];
+    const goals = Array.isArray(g) ? g : [];
+    // Ensure each goal has a points field (default 1)
+    return goals.map(g => ({ ...g, points: g.points ?? 1 }));
   }
   function setGoals(key, list) { storeSet(key, list); }
+
+// ---------- Point system helpers ----------
+function dateToKeyDateStr(dateStr) { return dateStr; } // just identity
+
+function computeDailyTotal(dateStr) {
+  const goals = getGoals('goals:' + dateStr);
+  let total = 0;
+  for (const g of goals) {
+    if (g.done) total += g.points;
+  }
+  return total;
+}
+
+function storeDailyTotal(dateStr, total) {
+  storeSet('points:' + dateStr, total);
+}
+
+function updateDailyTotalForKey(key) {
+  // key format 'goals:YYYY-MM-DD'
+  if (!key || !key.startsWith('goals:')) return;
+  const dateStr = key.slice('goals:'.length);
+  const total = computeDailyTotal(dateStr);
+  storeDailyTotal(dateStr, total);
+  // Optionally dispatch points-changed after storage? We'll do in caller.
+}
+
+// Compute monthly total for given year and month (0-index)
+function getMonthlyTotal(year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let sum = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${pad2(month + 1)}-${pad2(d)}`;
+    const total = Number(storeGet('points:' + dateStr)) || 0;
+    sum += total;
+  }
+  return sum;
+}
+
+// Render monthly points list
+function renderMonthlyPoints() {
+  const container = document.getElementById('monthlyPointsList');
+  if (!container) return;
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth(); // 0-index
+  const prevMonth = (curMonth - 1 + 12) % 12;
+  const prevYear = curMonth === 0 ? curYear - 1 : curYear;
+
+  const curTotal = getMonthlyTotal(curYear, curMonth);
+  const prevTotal = getMonthlyTotal(prevYear, prevMonth);
+
+  container.innerHTML = '';
+
+  // Show last 3 months including current
+  const monthsToShow = 3;
+  for (let i = 0; i < monthsToShow; i++) {
+    let monthIdx = (curMonth - i + 12) % 12;
+    let yearAdj = curYear - Math.floor((i - curMonth + 12) / 12);
+    if (i === 0 && curMonth === 0) yearAdj = curYear; // adjust for Jan
+    const monthName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthIdx];
+    const total = getMonthlyTotal(yearAdj, monthIdx);
+    const isCurrent = (monthIdx === curMonth && yearAdj === curYear);
+    const isPrev = (monthIdx === prevMonth && yearAdj === prevYear);
+
+    const div = document.createElement('div');
+    div.style.padding = '6px 0';
+    div.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+    div.innerHTML = `
+      <span style="flex:1; color:var(--text-secondary);">${monthName} ${yearAdj}</span>
+      <span style="color:var(--text-primary); font-variant-numeric:tabular-nums;">${total}</span>
+    `;
+    // If current month and higher than previous, add green message after list
+    container.appendChild(div);
+  }
+
+  // Add motivational message if current > previous
+  if (curTotal > prevTotal) {
+    const msg = document.createElement('div');
+    msg.style.padding = '10px 0';
+    msg.style.color = 'var(--success)';
+    msg.style.fontSize = '14px';
+    msg.textContent = 'The hard work is paying off Just like you are a winner. Don\'t Stop Now!';
+    container.appendChild(msg);
+  }
+}
 
   function loadTitle() {
     const title = storeGet(TITLE_KEY);
@@ -880,6 +967,7 @@ body::after {
     updateDayRing();
     buildCalendar();
     if (selectedDate) showDayDetails(selectedDate);
+    renderMonthlyPoints();
   }
 
   // ---------- rollover: pull undone older goals into today ----------
@@ -1168,6 +1256,26 @@ body::after {
     handle.textContent = '⋮⋮';
     li.appendChild(handle);
 
+    const pointsInput = document.createElement('input');
+    pointsInput.type = 'number';
+    pointsInput.min = '0';
+    pointsInput.value = goal.points;
+    pointsInput.className = 'gm-points';
+    pointsInput.style.width = '40px';
+    pointsInput.style.marginRight = '6px';
+    if (readOnly) pointsInput.disabled = true;
+    pointsInput.addEventListener('change', () => {
+      const val = parseInt(pointsInput.value, 10) || 0;
+      const list = getGoals(key);
+      if (!list[idx]) return;
+      list[idx].points = val;
+      setGoals(key, list);
+      updateDailyTotalForKey(key);
+      window.dispatchEvent(new CustomEvent('points-changed'));
+      reload();
+    });
+    li.appendChild(pointsInput);
+
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'gm-check';
@@ -1180,6 +1288,8 @@ body::after {
       if (cb.checked) list[idx].doneAt = Date.now();
       else delete list[idx].doneAt;
       setGoals(key, list);
+      updateDailyTotalForKey(key);
+      window.dispatchEvent(new CustomEvent('points-changed'));
       reload();
     });
     li.appendChild(cb);
@@ -1215,6 +1325,8 @@ body::after {
       const list = getGoals(key);
       list.splice(idx, 1);
       setGoals(key, list);
+      updateDailyTotalForKey(key);
+      window.dispatchEvent(new CustomEvent('points-changed'));
       reload();
     });
     li.appendChild(del);
