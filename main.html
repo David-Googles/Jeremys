@@ -643,6 +643,14 @@ body::after {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--success); margin-top: 2px;
 }
+.point-total {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 10px;
+  color: var(--success);
+  font-weight: 600;
+}
 
 .cal-details {
   margin-top: 8px; padding-top: 12px;
@@ -790,6 +798,14 @@ body::after {
       </div>
     </div>
   </div>
+
+    <!-- POINT TRENDS SECTION -->
+    <div class="section">
+      <div class="section-title">Point Trends</div>
+      <div class="gm-card" id="pointTrendsContainer">
+        <!-- Point trends chart will be rendered here -->
+      </div>
+    </div>
 
 </div>
 
@@ -968,6 +984,7 @@ function renderMonthlyPoints() {
     buildCalendar();
     if (selectedDate) showDayDetails(selectedDate);
     renderMonthlyPoints();
+    renderPointTrendsChart();
   }
 
   // ---------- rollover: pull undone older goals into today ----------
@@ -1082,6 +1099,10 @@ function renderMonthlyPoints() {
   window.addEventListener('goals-changed', () => {
     cycleIdx = 0;
     tick();
+    renderAllMain();
+  });
+
+  window.addEventListener('points-changed', () => {
     renderAllMain();
   });
 
@@ -1595,12 +1616,16 @@ function renderMonthlyPoints() {
       dayEl.dataset.date = dateStr;
 
       const stats = getDayStats(dateStr);
+      const pointTotal = computeDailyTotal(dateStr);
       if (stats) {
         dayEl.classList.add('has-goals');
         if (stats.percent > 65) dayEl.classList.add('fire');
-        const dot = document.createElement('div');
-        dot.className = 'cal-dot';
-        dayEl.appendChild(dot);
+      }
+      if (pointTotal > 0) {
+        const pointEl = document.createElement('div');
+        pointEl.className = 'point-total';
+        pointEl.textContent = pointTotal;
+        dayEl.appendChild(pointEl);
       }
 
       dayEl.addEventListener('click', () => {
@@ -1684,6 +1709,117 @@ function renderMonthlyPoints() {
     buildCalendar();
   });
 
+  // Get monthly points for the last 12 months
+  function getMonthlyPointsLast12Months() {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0-index
+
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      let monthIdx = (curMonth - i + 12) % 12;
+      let yearAdj = curYear - Math.floor((i - curMonth + 12) / 12);
+      const monthName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthIdx];
+      const total = getMonthlyTotal(yearAdj, monthIdx);
+      months.push({
+        month: monthName,
+        year: yearAdj,
+        monthIndex: monthIdx,
+        points: total
+      });
+    }
+    return months.reverse(); // Most recent first (chronological order)
+  }
+
+  // Render point trends chart as a horizontal bar chart
+  function renderPointTrendsChart() {
+    const container = document.getElementById('pointTrendsContainer');
+    if (!container) return;
+
+    const monthlyData = getMonthlyPointsLast12Months();
+    if (monthlyData.length === 0) {
+      container.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No point data available</p>';
+      return;
+    }
+
+    // Find max points for scaling
+    let maxPoints = 0;
+    for (const data of monthlyData) {
+      if (data.points > maxPoints) maxPoints = data.points;
+    }
+
+    // Avoid division by zero
+    if (maxPoints === 0) maxPoints = 1;
+
+    container.innerHTML = '';
+
+    // Create chart title
+    const title = document.createElement('div');
+    title.style.textAlign = 'center';
+    title.style.padding = '12px 0';
+    title.style.color = 'var(--text-primary)';
+    title.style.fontSize = '16px';
+    title.style.fontWeight = '600';
+    title.textContent = 'Monthly Points Trend (Last 12 Months)';
+    container.appendChild(title);
+
+    // Create chart container
+    const chartContainer = document.createElement('div');
+    chartContainer.style.display = 'grid';
+    chartContainer.style.gridTemplateColumns = '60px 1fr 80px'; // Month label, bar, points value
+    chartContainer.style.gap = '12px';
+    chartContainer.style.padding = '0 12px';
+    container.appendChild(chartContainer);
+
+    // Create bars for each month
+    for (const data of monthlyData) {
+      // Month label
+      const monthLabel = document.createElement('div');
+      monthLabel.style.display = 'flex';
+      monthLabel.style.alignItems = 'center';
+      monthLabel.style.color = 'var(--text-secondary)';
+      monthLabel.style.fontSize = '13px';
+      monthLabel.textContent = `${data.month} '${String(data.year).slice(-2)}`;
+      chartContainer.appendChild(monthLabel);
+
+      // Bar container
+      const barContainer = document.createElement('div');
+      barContainer.style.background = 'rgba(255,255,255,0.04)';
+      barContainer.style.borderRadius = '4px';
+      barContainer.style.height = '20px';
+      barContainer.style.position = 'relative';
+      chartContainer.appendChild(barContainer);
+
+      // Bar fill
+      const barFill = document.createElement('div');
+      barFill.style.background = 'var(--success)';
+      barFill.style.width = `${(data.points / maxPoints) * 100}%`;
+      barFill.style.height = '100%';
+      barFill.style.borderRadius = '4px';
+      barFill.style.transition = 'width 0.3s ease';
+      barContainer.appendChild(barFill);
+
+      // Points value
+      const pointsValue = document.createElement('div');
+      pointsValue.style.display = 'flex';
+      pointsValue.style.alignItems = 'center';
+      pointsValue.style.justifyContent = 'flex-end';
+      pointsValue.style.color = 'var(--text-primary)';
+      pointsValue.style.fontVariantNumeric = 'tabular-nums';
+      pointsValue.style.fontSize = '13px';
+      pointsValue.style.fontWeight = '600';
+      pointsValue.textContent = data.points;
+      chartContainer.appendChild(pointsValue);
+    }
+  }
+
+  // Render enhanced monthly comparison
+  function renderMonthlyComparison() {
+    // This enhances the existing monthly points display
+    // The point trends chart provides the visual comparison
+    // We could add a textual summary here if needed, but the chart is sufficient for now
+  }
+
   // ---------- Boot ----------
   rollover();
   processStreak();
@@ -1701,7 +1837,7 @@ function renderMonthlyPoints() {
       window.initCloudSync({
         appKey: 'goals',
         syncedKeys: [TITLE_KEY, 'goal_streak_v1'],
-        syncedPrefixes: ['goals:'],
+        syncedPrefixes: ['goals:', 'points:'],
         onApplied: renderAllMain
       });
     }
