@@ -192,7 +192,7 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
           'X-Title': 'Nova Lite',
         },
         body: JSON.stringify({
-          model: 'anthropic/claude-3-opus', // you can change to any model available on OpenRouter
+          model: 'anthropic/claude-3.5-sonnet', // you can change to any model available on OpenRouter
           max_tokens: 1024,
           messages: [
             { role: 'system', content: SYS + JSON.stringify(dashboardData()) },
