@@ -9,10 +9,10 @@
  * Single self-contained file. No backend, no build step.
  *
  * HOW IT WORKS (bring-your-own-key):
- *   • The viewer pastes their OWN OpenRouter API key (stored only in
- *     their browser's localStorage — never sent anywhere but OpenRouter).
+ *   • The viewer pastes their OWN Groq API key (stored only in
+ *     their browser's localStorage — never sent anywhere but Groq.
  *   • Nova reads whatever the dashboard saved in localStorage for context.
- *   • Calls the selected model via OpenRouter API directly from the browser.
+ *   • Calls the selected model via Groq API directly from the browser.
  *
  * This is the lightweight version: a flat CSS orb (no 3D), basic chat.
  * The premium build (3D avatar, Spark voice scheduler, secure server
@@ -92,12 +92,12 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
 
     <div class="keypanel" id="keypanel">
       <div class="keybar">
-        <input id="keyInput" type="password" placeholder="paste your OpenRouter API key (sk-or-…)" autocomplete="off" />
+        <input id="keyInput" type="password" placeholder="paste your Groq API key (gsk_…)" autocomplete="off" />
         <button id="keySave">Save</button>
       </div>
       <div class="hint" id="hint">
-        Your key is stored only in <b>this browser</b> and sent straight to OpenRouter — never to us.
-        Get one at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.
+        Your key is stored only in <b>this browser</b> and sent straight to Groq — never to us.
+        Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>.
       </div>
     </div>
 
@@ -136,6 +136,7 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
     keyToggle.classList.add('has-key');
     keypanel.classList.remove('open'); // tuck it away so it's not on screen
   });
+  keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') keySave.click(); });
 
   // ---- read whatever the dashboard stored (for context) ----
   function dashboardData(){
@@ -162,7 +163,14 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
     return html;
   }
   function addUser(t){ const e = document.createElement('div'); e.className = 'msg user'; e.innerHTML = '<div class="bubble">' + esc(t) + '</div>'; feed.appendChild(e); scroll(); }
-  function addCoach(html){ const e = document.createElement('div'); e.className = 'msg coach'; e.innerHTML = '<div class="bubble"><span class="tag">Nova</span><div>' + html + '</div></div>'; feed.appendChild(e); scroll(); return e; }
+  function addCoach(html){
+  const e = document.createElement('div');
+  e.className = 'msg coach';
+  e.innerHTML = '<div class="bubble"><span class="tag">Nova</span><div class="content">' + html + '</div></div>';
+  feed.appendChild(e);
+  scroll();
+  return e;
+}
   function scroll(){ window.scrollTo(0, document.body.scrollHeight); }
 
   const SYS =
@@ -177,22 +185,25 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
   let busy = false;
   async function ask(text){
     text = (text||'').trim(); if (!text || busy) return;
-    const key = savedKey();
-    if (!key){ addCoach('- Paste your **OpenRouter API key** above first, then ask me again.'); return; }
+    const key = savedKey().trim();
+    if (!key){ addCoach('- Paste your **Groq API key** above first, then ask me again.'); return; }
+    // Basic API key validation
+    if (!key.startsWith('gsk_')) {
+        addCoach('- Invalid Groq API key format. Keys should start with "gsk_"');
+        return;
+    }
     busy = true; addUser(text); input.value = '';
     setOrb('think');
     const loading = addCoach('<span class="dots"><i></i><i></i><i></i></span>');
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           'Authorization': `Bearer ${key}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Nova Lite',
         },
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-70b-instruct:free', // you can change to any model available on OpenRouter
+          model: 'llama-3.3-70b-versatile',
           max_tokens: 1024,
           messages: [
             { role: 'system', content: SYS + JSON.stringify(dashboardData()) },
@@ -200,20 +211,35 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
           ],
         }),
       });
+
+      // Handle HTTP errors
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.log(`HTTP Error! Status: ${res.status}`);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
+      }
+
       const json = await res.json();
       if (json.error){
         const msg = json.error.message || json.error || 'Something went wrong — check your API key.';
-        loading.querySelector('div:last-child').innerHTML = render('- ' + msg);
+        // Show more detailed error info for debugging
+        const detailedMsg = json.error?.message || json.error || 'Unknown error';
+        console.log('API Error:', json.error);
+        loading.querySelector('.content').innerHTML = render('- ' + detailedMsg);
         setOrb('');
         busy = false;
         return;
       }
       const reply = (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || 'Hmm, no reply.';
-      loading.querySelector('div:last-child').innerHTML = render(reply);
+      loading.querySelector('.content').innerHTML = render(reply);
       setOrb('happy'); setTimeout(() => setOrb(''), 2500);
     } catch(e){
-      console.error(e);
-      loading.querySelector('div:last-child').innerHTML = render('- Could not reach OpenRouter — check your connection and key.');
+      console.error('Fetch error:', e);
+      let errorMsg = '- Could not reach Groq — check your connection and key.';
+      if (e.message.includes('HTTP')) {
+        errorMsg = `- API error: ${e.message}`;
+      }
+      loading.querySelector('.content').innerHTML = render(errorMsg);
       setOrb('');
     }
     busy = false;
@@ -222,7 +248,7 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: 
   document.getElementById('send').addEventListener('click', () => ask(input.value));
   input.addEventListener('keydown', e => { if (e.key === 'Enter') ask(input.value); });
 
-  addCoach('Hey — I am <b>Nova</b>. Paste your key above, then ask me about food, training, sleep, or where to start. I keep it short and give you <b>one thing to act on</b>.');
+  addCoach('Hey — I am <b>Nova</b>. Paste your Groq API key above (should start with "gsk_"), then ask me about food, training, sleep, or where to start. I keep it short and give you <b>one thing to act on</b>.');
 })();
 </script>
 </body>
