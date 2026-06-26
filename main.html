@@ -1439,6 +1439,15 @@ function renderMonthlyPoints() {
         }
         updateLabel();
       });
+      // If initially expanded, insert extra goals before toggle
+      if (expanded) {
+        const fragment = document.createDocumentFragment();
+        goals.slice(5).forEach((g, i) => {
+          const row = buildGoalRow(g, i + 5, key, readOnly, reload);
+          fragment.appendChild(row);
+        });
+        listEl.insertBefore(fragment, toggle);
+      }
       listEl.appendChild(toggle);
     }
 
