@@ -1408,6 +1408,10 @@ function renderMonthlyPoints() {
     visible.forEach((g, i) => listEl.appendChild(buildGoalRow(g, i, key, readOnly, reload)));
 
     if (goals.length > 5) {
+      // Remove any existing toggle buttons to prevent duplicates
+      const existingToggles = listEl.querySelectorAll('.gm-show-toggle');
+      existingToggles.forEach(t => t.remove());
+
       let expanded = false;
       const toggle = document.createElement('button');
       toggle.type = 'button';
@@ -1419,10 +1423,13 @@ function renderMonthlyPoints() {
       toggle.addEventListener('click', () => {
         expanded = !expanded;
         if (expanded) {
+          // Create a document fragment for better performance
+          const fragment = document.createDocumentFragment();
           goals.slice(5).forEach((g, i) => {
             const row = buildGoalRow(g, i + 5, key, readOnly, reload);
-            listEl.insertBefore(row, toggle);
+            fragment.appendChild(row);
           });
+          listEl.insertBefore(fragment, toggle);
         } else {
           Array.from(listEl.querySelectorAll('.gm-row')).slice(5).forEach(r => r.remove());
         }
