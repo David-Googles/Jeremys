@@ -1734,21 +1734,23 @@ function renderMonthlyPoints() {
   // iOS viewport height fix for keyboard appearing/disappearing
   function handleViewportHeight() {
     // Set CSS custom property for viewport height
-    let vh = window.innerHeight * 0.01;
+    const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
 
-    // Also handle iOS specific viewport issues
-    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      // When keyboard appears/disappears, adjust body height
-      let oldHeight = window.innerHeight;
+    // Update on resize or visual viewport changes (for iOS keyboard)
+    const updateVH = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
 
-      window.addEventListener('resize', () => {
-        if (window.innerHeight !== oldHeight) {
-          // Keyboard likely appeared/dismissed
-          vh = window.innerHeight * 0.01;
-          document.documentElement.style.setProperty('--vh', `${vh}px`);
-          oldHeight = window.innerHeight;
-        }
+    // Listen to resize event
+    window.addEventListener('resize', updateVH);
+
+    // If visual viewport API is available, use it for more accurate keyboard events
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        const vh = window.visualViewport.height * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
       });
     }
   }
