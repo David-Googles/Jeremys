@@ -1410,14 +1410,22 @@ function renderMonthlyPoints() {
     if (goals.length > 5) {
       // Remove any existing toggle buttons to prevent duplicates
       const existingToggles = listEl.querySelectorAll('.gm-show-toggle');
+      // Determine if toggle was previously expanded (from the last remaining toggle)
+      let expanded = false;
+      if (existingToggles.length) {
+        expanded = existingToggles[0].dataset.expanded === 'true';
+      }
       existingToggles.forEach(t => t.remove());
 
-      let expanded = false;
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'gm-show-toggle';
+      toggle.dataset.expanded = expanded;
       const updateLabel = () => {
-        toggle.textContent = expanded ? 'Show less ▴' : ('Show ' + (goals.length - 5) + ' more ▾');
+        toggle.textContent = expanded
+          ? 'Show less ▴'
+          : `Show ${goals.length - 5} more ▾`;
+        toggle.dataset.expanded = expanded;
       };
       updateLabel();
       toggle.addEventListener('click', () => {
