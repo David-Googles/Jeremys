@@ -1439,8 +1439,9 @@ function renderMonthlyPoints() {
         }
         updateLabel();
       });
-      // If initially expanded, insert extra goals before toggle
+      listEl.appendChild(toggle);
       if (expanded) {
+        // If initially expanded, insert extra goals before toggle
         const fragment = document.createDocumentFragment();
         goals.slice(5).forEach((g, i) => {
           const row = buildGoalRow(g, i + 5, key, readOnly, reload);
@@ -1448,7 +1449,6 @@ function renderMonthlyPoints() {
         });
         listEl.insertBefore(fragment, toggle);
       }
-      listEl.appendChild(toggle);
     }
 
     if (key === todayKey()) renderTodayHeader();
