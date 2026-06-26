@@ -31,7 +31,7 @@ html, body {
   -webkit-text-size-adjust: 100%;
 }
 body {
-  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
   position: relative;
   overflow-x: hidden;
   padding: max(28px, env(safe-area-inset-top)) 20px 60px;
@@ -1731,6 +1731,28 @@ function renderMonthlyPoints() {
     return months.reverse(); // Most recent first (chronological order)
   }
 
+  // iOS viewport height fix for keyboard appearing/disappearing
+  function handleViewportHeight() {
+    // Set CSS custom property for viewport height
+    let vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+    // Also handle iOS specific viewport issues
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      // When keyboard appears/disappears, adjust body height
+      let oldHeight = window.innerHeight;
+
+      window.addEventListener('resize', () => {
+        if (window.innerHeight !== oldHeight) {
+          // Keyboard likely appeared/dismissed
+          vh = window.innerHeight * 0.01;
+          document.documentElement.style.setProperty('--vh', `${vh}px`);
+          oldHeight = window.innerHeight;
+        }
+      });
+    }
+  }
+
   // Render point trends chart as a horizontal bar chart
   function renderPointTrendsChart() {
     const container = document.getElementById('pointTrendsContainer');
@@ -1824,6 +1846,7 @@ function renderMonthlyPoints() {
   rollover();
   processStreak();
   renderAllMain();
+  handleViewportHeight();
   setInterval(updateDayRing, 60 * 1000);
   startTicker();
 
