@@ -1413,7 +1413,7 @@ function renderMonthlyPoints() {
       const existingToggles = listEl.querySelectorAll('.gm-show-toggle');
       existingToggles.forEach(t => t.remove());
 
-      const expanded = listExpandState.get(listEl) ?? false;
+      let expanded = listExpandState.get(listEl) ?? false;
       const toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'gm-show-toggle';
