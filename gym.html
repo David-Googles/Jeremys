@@ -2928,9 +2928,27 @@ img, video, canvas, svg { max-width: 100%; }
     points.forEach((p, i) => {
       const cls = (i === points.length - 1) ? 'wt-dot-today' : 'wt-dot';
       const r = (i === points.length - 1) ? 5 : 3;
-      html += '<circle class="' + cls + '" cx="' + p.x.toFixed(2) + '" cy="' + p.y.toFixed(2) + '" r="' + r + '"/>';
+      const point = recent[i];
+      const date = wtParseKey(point.dateKey);
+      const dateStr = (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
+      const weightStr = point.weight.toFixed(1) + ' ' + state.units;
+      const title = dateStr + ' – ' + weightStr;
+      html += '<circle class="' + cls + '" cx="' + p.x.toFixed(2) + '" cy="' + p.y.toFixed(2) + '" r="' + r + '">' +
+                '<title>' + escape(title) + '</title>' +
+              '</circle>';
     });
     $('wtChartContent').innerHTML = html;
+    // Add click event listeners to each point for showing details
+    const circles = $('wtChartContent').querySelectorAll('circle');
+    circles.forEach((circle, index) => {
+      const point = recent[index];
+      const date = wtParseKey(point.dateKey);
+      const dateStr = (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
+      const weightStr = point.weight.toFixed(1) + ' ' + state.units;
+      circle.addEventListener('click', () => {
+        alert(dateStr + ' – ' + weightStr);
+      });
+    });
     $('wtYAxisMax').textContent = yMax.toFixed(1);
     $('wtYAxisMin').textContent = yMin.toFixed(1);
     $('wtMeta').textContent = wtEntries.length + ' ' + (wtEntries.length === 1 ? 'entry' : 'entries') + ' · last ' + recent.length + ' days';
