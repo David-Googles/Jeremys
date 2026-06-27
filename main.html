@@ -803,7 +803,8 @@ body::after {
     <div class="section">
       <div class="section-title">Point Trends</div>
       <div class="gm-card" id="pointTrendsContainer">
-        <!-- Point trends chart will be rendered here -->
+        <div id="monthlyPointsDisplay" style="margin-bottom: 16px;"></div>
+        <div id="pointTrendsChart"></div>
       </div>
     </div>
 
@@ -820,6 +821,7 @@ body::after {
   const WAKE_HOUR  = 8;
   const SLEEP_HOUR = 24;
   const TITLE_KEY = 'goal_title_v1';
+const MONTHLY_GOAL_KEY = 'monthly_goal_v1';
 
   // ---------- storage helpers ----------
   function storeGet(key) {
@@ -915,51 +917,64 @@ function getMonthlyTotal(year, month) {
   return sum;
 }
 
-// Render monthly points list
+// Render monthly goal progress
 function renderMonthlyPoints() {
-  const container = document.getElementById('monthlyPointsList');
+  const container = document.getElementById('monthlyPointsDisplay');
   if (!container) return;
+
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth(); // 0-index
-  const prevMonth = (curMonth - 1 + 12) % 12;
-  const prevYear = curMonth === 0 ? curYear - 1 : curYear;
 
   const curTotal = getMonthlyTotal(curYear, curMonth);
-  const prevTotal = getMonthlyTotal(prevYear, prevMonth);
+  const monthlyGoal = loadMonthlyGoal();
+  const progress = Math.min((curTotal / monthlyGoal) * 100, 100); // Cap at 100%
 
-  container.innerHTML = '';
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: rgba(255,255,255,0.04); border-radius: 16px; backdrop-filter: blur(24px) saturate(1.2);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary);">Monthly Goal Progress</h3>
+        <button id="setMonthlyGoalBtn" style="padding: 6px 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); border-radius: 8px; color: var(--text-tertiary); font-size: 12px; cursor: pointer;">
+          Set Goal
+        </button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary);">
+          <span>Points Earned:</span>
+          <span style="font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary);">${curTotal}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-secondary);">
+          <span>Monthly Goal:</span>
+          <span id="monthlyGoalValue" style="font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary);">${monthlyGoal}</span>
+        </div>
+      </div>
+      <div style="background: rgba(255,255,255,0.06); height: 12px; border-radius: 6px; overflow: hidden;">
+        <div id="monthlyProgressBar" style="background: var(--success); width: ${progress}%; height: 100%; transition: width 0.3s ease;"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-primary); font-variant-numeric: tabular-nums;">
+        <span>${Math.round(progress)}%</span>
+        <span>${curTotal} / ${monthlyGoal} points</span>
+      </div>
+    </div>
+  `;
 
-  // Show last 3 months including current
-  const monthsToShow = 3;
-  for (let i = 0; i < monthsToShow; i++) {
-    let monthIdx = (curMonth - i + 12) % 12;
-    let yearAdj = curYear - Math.floor((i - curMonth + 12) / 12);
-    if (i === 0 && curMonth === 0) yearAdj = curYear; // adjust for Jan
-    const monthName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthIdx];
-    const total = getMonthlyTotal(yearAdj, monthIdx);
-    const isCurrent = (monthIdx === curMonth && yearAdj === curYear);
-    const isPrev = (monthIdx === prevMonth && yearAdj === prevYear);
-
-    const div = document.createElement('div');
-    div.style.padding = '6px 0';
-    div.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
-    div.innerHTML = `
-      <span style="flex:1; color:var(--text-secondary);">${monthName} ${yearAdj}</span>
-      <span style="color:var(--text-primary); font-variant-numeric:tabular-nums;">${total}</span>
-    `;
-    // If current month and higher than previous, add green message after list
-    container.appendChild(div);
-  }
-
-  // Add motivational message if current > previous
-  if (curTotal > prevTotal) {
-    const msg = document.createElement('div');
-    msg.style.padding = '10px 0';
-    msg.style.color = 'var(--success)';
-    msg.style.fontSize = '14px';
-    msg.textContent = 'The hard work is paying off Just like you are a winner. Don\'t Stop Now!';
-    container.appendChild(msg);
+  // Add event listener for setting goal
+  const setGoalBtn = document.getElementById('setMonthlyGoalBtn');
+  if (setGoalBtn) {
+    setGoalBtn.addEventListener('click', () => {
+      const newGoal = prompt(`Enter your monthly point goal (current: ${monthlyGoal}):`, monthlyGoal);
+      if (newGoal !== null) {
+        const goalNum = parseInt(newGoal, 10);
+        if (!isNaN(goalNum) && goalNum > 0) {
+          saveMonthlyGoal(goalNum);
+          renderMonthlyPoints(); // Re-render with new goal
+          // Also update the point trends chart since goal might affect display? Not really, but let's be safe
+          renderPointTrendsChart();
+        } else {
+          alert('Please enter a valid number greater than 0.');
+        }
+      }
+    });
   }
 }
 
@@ -976,7 +991,17 @@ function renderMonthlyPoints() {
     if (el) el.textContent = title;
     document.title = title;
   }
-  function renderAllMain() {
+
+// Monthly goal functions
+function loadMonthlyGoal() {
+  const goal = storeGet(MONTHLY_GOAL_KEY);
+  return typeof goal === 'number' && goal > 0 ? goal : 300; // default 300 points
+}
+function saveMonthlyGoal(goal) {
+  storeSet(MONTHLY_GOAL_KEY, goal);
+}
+
+function renderAllMain() {
     renderTitle();
     loadToday();
     loadTomorrow();
@@ -1875,13 +1900,16 @@ function renderMonthlyPoints() {
   // Seed the title key so it can sync across devices.
   if (!localStorage.getItem(TITLE_KEY)) saveTitle(loadTitle());
 
+  // Seed the monthly goal key so it can sync across devices.
+  if (!localStorage.getItem(MONTHLY_GOAL_KEY)) saveMonthlyGoal(loadMonthlyGoal());
+
   // Cloud sync - initialize after supabase loads
   document.addEventListener('DOMContentLoaded', function() {
     if (window.initCloudSync && !window._cloudSyncInitialized) {
       window._cloudSyncInitialized = true;
       window.initCloudSync({
         appKey: 'goals',
-        syncedKeys: [TITLE_KEY, 'goal_streak_v1'],
+        syncedKeys: [TITLE_KEY, 'goal_streak_v1', MONTHLY_GOAL_KEY],
         syncedPrefixes: ['goals:', 'points:'],
         onApplied: renderAllMain
       });
