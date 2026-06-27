@@ -997,6 +997,14 @@ img, video, canvas, svg { max-width: 100%; }
 .wt-comp-headline.good   { color: var(--good); }
 .wt-comp-headline.warn   { color: var(--warn); }
 .wt-comp-headline.bad    { color: var(--bad); }
+.wt-comp-category {
+  font-size: 13px; font-weight: 600; text-align: center; margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+.wt-comp-category.lean-bulk { color: var(--good); }
+.wt-comp-category.bulk { color: var(--warn); }
+.wt-comp-category.cut { color: var(--bad); }
+.wt-comp-category.maintain { color: var(--text-2); }
 .wt-comp-bars {
   display: flex; height: 10px; border-radius: 5px;
   overflow: hidden; margin-bottom: 8px;
@@ -1284,7 +1292,19 @@ img, video, canvas, svg { max-width: 100%; }
   .wt-compare-meta-line { font-size: 11px; }
 }
 
+/* Weekly info */
+.wt-weekly-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: center;
+}
 .hidden { display: none !important; }
+
+/* Tooltip for chart points */
+.wt-tooltip {
+  pointer-events: none;
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -1330,6 +1350,7 @@ img, video, canvas, svg { max-width: 100%; }
           <g id="wtChartContent"></g>
         </svg>
         <div class="wt-meta" id="wtMeta">0 entries</div>
+        <div class="wt-weekly-info" id="wtWeeklyInfo"></div>
       </div>
 
       <div class="wt-legend hidden" id="wtLegend">
@@ -1345,6 +1366,7 @@ img, video, canvas, svg { max-width: 100%; }
           <span class="wt-comp-window" id="wtCompWindow">last 30d</span>
         </div>
         <div class="wt-comp-headline" id="wtCompHeadline">—</div>
+        <div class="wt-comp-category" id="wtCompCategory"></div>
         <div class="wt-comp-bars" id="wtCompBars"></div>
         <div class="wt-comp-foot" id="wtCompFoot">—</div>
       </div>
@@ -2877,6 +2899,7 @@ img, video, canvas, svg { max-width: 100%; }
       $('wtComp').classList.add('hidden');
     }
     wtRenderStreak();
+    wtRenderWeeklyInfo();
   }
 
   // Streak — consecutive days ending at today (or yesterday if today
@@ -2938,15 +2961,52 @@ img, video, canvas, svg { max-width: 100%; }
               '</circle>';
     });
     $('wtChartContent').innerHTML = html;
-    // Add click event listeners to each point for showing details
+    // Add click and hover event listeners to each point for showing details
     const circles = $('wtChartContent').querySelectorAll('circle');
     circles.forEach((circle, index) => {
       const point = recent[index];
       const date = wtParseKey(point.dateKey);
       const dateStr = (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
       const weightStr = point.weight.toFixed(1) + ' ' + state.units;
+      const title = dateStr + ' – ' + weightStr;
+
+      // Click handler
       circle.addEventListener('click', () => {
         alert(dateStr + ' – ' + weightStr);
+      });
+
+      // Hover tooltip
+      circle.addEventListener('mouseover', (e) => {
+        // Create tooltip element
+        const tooltip = document.createElement('div');
+        tooltip.className = 'wt-tooltip';
+        tooltip.innerHTML = `<div>${dateStr}</div><div>${weightStr}</div>`;
+        tooltip.style.position = 'absolute';
+        tooltip.style.background = 'rgba(0,0,0,0.8)';
+        tooltip.style.color = 'white';
+        tooltip.style.padding = '4px 8px';
+        tooltip.style.borderRadius = '4px';
+        tooltip.style.fontSize = '12px';
+        tooltip.style.pointerEvents = 'none';
+        tooltip.style.zIndex = '1000';
+
+        // Position near the circle
+        const rect = circle.getBoundingClientRect();
+        const svgRect = document.querySelector('.wt-chart').getBoundingClientRect();
+        const svgOffsetLeft = svgRect.left + window.pageXOffset;
+        const svgOffsetTop = svgRect.top + window.pageYOffset;
+
+        tooltip.style.left = (svgOffsetLeft + p.x + 10) + 'px';
+        tooltip.style.top = (svgOffsetTop + p.y - 30) + 'px';
+
+        document.body.appendChild(tooltip);
+      });
+
+      circle.addEventListener('mouseout', () => {
+        const tooltip = document.querySelector('.wt-tooltip');
+        if (tooltip) {
+          tooltip.remove();
+        }
       });
     });
     $('wtYAxisMax').textContent = yMax.toFixed(1);
@@ -3100,6 +3160,40 @@ img, video, canvas, svg { max-width: 100%; }
     const headlineEl = $('wtCompHeadline');
     headlineEl.textContent = headline;
     headlineEl.className = 'wt-comp-headline ' + headlineCls;
+
+    // Set category
+    const categoryEl = $('wtCompCategory');
+    let category = '';
+    let categoryClass = '';
+    if (weightDelta > 0) {
+      // Surplus: determine if lean bulk or bulk
+      const musclePct = estMuscle / weightDelta;
+      if (musclePct >= 0.6 && strengthDelta > 0) {
+        category = 'Lean Bulk';
+        categoryClass = 'lean-bulk';
+      } else {
+        category = 'Bulk';
+        categoryClass = 'bulk';
+      }
+    } else if (weightDelta < 0) {
+      // Deficit: determine if cut or maintain
+      const muscleLoss = estMuscle < 0 ? Math.abs(estMuscle / weightDelta) : 0;
+      if (muscleLoss <= 0.2) { // Losing mostly fat
+        category = 'Cut';
+        categoryClass = 'cut';
+      } else {
+        category = 'Maintain';
+        categoryClass = 'maintain';
+      }
+    } else {
+      // Maintenance
+      category = 'Maintain';
+      categoryClass = 'maintain';
+    }
+    if (categoryEl) {
+      categoryEl.textContent = category;
+      categoryEl.className = 'wt-comp-category ' + categoryClass;
+    }
 
     // Bars
     const totalAbs = Math.abs(estMuscle) + Math.abs(estFat) || 1;
@@ -3701,6 +3795,54 @@ img, video, canvas, svg { max-width: 100%; }
   }, true);
   window.addEventListener('pagehide', pcFlushPushOnUnload);
   window.addEventListener('beforeunload', pcFlushPushOnUnload);
+  // Weekly average and category
+  function wtRenderWeeklyInfo() {
+    const infoEl = $('wtWeeklyInfo');
+    if (!infoEl) return;
+    if (wtEntries.length === 0) {
+      if (infoEl) infoEl.textContent = 'No weight data';
+      return;
+    }
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const last7 = wtEntries.filter(e => {
+      const d = wtParseKey(e.dateKey);
+      return d >= sevenDaysAgo && d <= now;
+    });
+    let avg7 = 0;
+    if (last7.length) {
+      const sum = last7.reduce((s, e) => s + e.weight, 0);
+      avg7 = sum / last7.length;
+    }
+    const prevWeekStart = new Date(now);
+    prevWeekStart.setDate(now.getDate() - 13);
+    const prevWeekEnd = new Date(now);
+    prevWeekEnd.setDate(now.getDate() - 7);
+    const prev7 = wtEntries.filter(e => {
+      const d = wtParseKey(e.dateKey);
+      return d >= prevWeekStart && d < prevWeekEnd;
+    });
+    let avgPrev = 0;
+    if (prev7.length) {
+      const sum = prev7.reduce((s, e) => s + e.weight, 0);
+      avgPrev = sum / prev7.length;
+    }
+    // All-time average (all entries)
+    let avgAllTime = 0;
+    if (wtEntries.length) {
+      const sum = wtEntries.reduce((s, e) => s + e.weight, 0);
+      avgAllTime = sum / wtEntries.length;
+    }
+    function fmt(v) {
+      return v.toFixed(1) + ' ' + state.units;
+    }
+    const text = '7-day avg: ' + fmt(avg7) + ' (prev week: ' + fmt(avgPrev) + ', all-time: ' + fmt(avgAllTime) + ')';
+    if (infoEl) {
+      if (infoEl) infoEl.textContent = text;
+    }
+  }
+
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pcFlushPushOnUnload();
   });
