@@ -911,7 +911,7 @@ function getMonthlyTotal(year, month) {
   let sum = 0;
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${pad2(month + 1)}-${pad2(d)}`;
-    const total = Number(storeGet('points:' + dateStr)) || 0;
+    const total = computeDailyTotal(dateStr);
     sum += total;
   }
   return sum;
@@ -1896,6 +1896,16 @@ function renderAllMain() {
   handleViewportHeight();
   setInterval(updateDayRing, 60 * 1000);
   startTicker();
+
+  // Update display when the active date changes (e.g., at 6 AM rollover)
+  let lastDateKey = getActiveDateString();
+  setInterval(() => {
+    const currentDateKey = getActiveDateString();
+    if (currentDateKey !== lastDateKey) {
+      lastDateKey = currentDateKey;
+      renderAllMain();
+    }
+  }, 60 * 1000);
 
   // Seed the title key so it can sync across devices.
   if (!localStorage.getItem(TITLE_KEY)) saveTitle(loadTitle());
