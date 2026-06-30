@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#050506">
 <title>My Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1822,9 +1822,9 @@ function renderAllMain() {
     // But also handle the case where zoom gets stuck after keyboard dismiss
     const metaViewport = document.querySelector('meta[name="viewport"]');
     if (metaViewport && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      // Ensure maximum-scale=1 is set to prevent zoom sticking
-      if (!metaViewport.content.includes('maximum-scale=1')) {
-        metaViewport.content += ', maximum-scale=1';
+      // Ensure maximum-scale is NOT set (allows zoom in/out)
+      if (metaViewport.content.includes('maximum-scale=1')) {
+        metaViewport.content = metaViewport.content.replace(', maximum-scale=1', '');
       }
     }
   }
