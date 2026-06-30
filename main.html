@@ -1943,8 +1943,9 @@ function renderAllMain() {
   if (!localStorage.getItem(MONTHLY_GOAL_KEY)) saveMonthlyGoal(loadMonthlyGoal());
 
   // Cloud sync - initialize after supabase loads
-  document.addEventListener('DOMContentLoaded', function() {
-    if (window.initCloudSync && !window._cloudSyncInitialized) {
+  function initCloudSyncWithRetry(attempts) {
+    attempts = attempts || 0;
+    if (window.initCloudSync && window.supabase && !window._cloudSyncInitialized) {
       window._cloudSyncInitialized = true;
       window.initCloudSync({
         appKey: 'goals',
@@ -1952,8 +1953,20 @@ function renderAllMain() {
         syncedPrefixes: ['goals:', 'points:'],
         onApplied: renderAllMain
       });
+      console.log('[main.html] Cloud sync initialized');
+    } else if (attempts < 30) {
+      // Retry every 100ms for up to 3 seconds
+      setTimeout(() => initCloudSyncWithRetry(attempts + 1), 100);
+    } else {
+      console.warn('[main.html] Cloud sync init failed: initCloudSync or supabase not ready');
     }
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initCloudSyncWithRetry());
+  } else {
+    initCloudSyncWithRetry();
+  }
   // e
   // Re-render when storage changes from another tab (or our bridged parent).
   window.addEventListener('storage', () => {
