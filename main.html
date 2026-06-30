@@ -1947,15 +1947,18 @@ function renderAllMain() {
     attempts = attempts || 0;
     if (window.initCloudSync && window.supabase && !window._cloudSyncInitialized) {
       window._cloudSyncInitialized = true;
+      console.log('[main.html] Initializing cloud sync for appKey: goals');
       window.initCloudSync({
         appKey: 'goals',
         syncedKeys: [TITLE_KEY, 'goal_streak_v1', MONTHLY_GOAL_KEY],
         syncedPrefixes: ['goals:', 'points:'],
-        onApplied: renderAllMain
+        onApplied: (data) => {
+          console.log('[main.html] Cloud sync applied remote data:', data);
+          renderAllMain();
+        }
       });
       console.log('[main.html] Cloud sync initialized');
     } else if (attempts < 30) {
-      // Retry every 100ms for up to 3 seconds
       setTimeout(() => initCloudSyncWithRetry(attempts + 1), 100);
     } else {
       console.warn('[main.html] Cloud sync init failed: initCloudSync or supabase not ready');
